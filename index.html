@@ -305,8 +305,8 @@ tbody tr:last-child td{border-bottom:none}
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
     </div>
     <div>
-      <div class="hdr-title" id="hdrTitle">Babai Tiffin — SJP<span class="live-badge">LIVE</span></div>
-      <div class="hdr-sub" id="hdrSub">MIS Dashboard · Select a sheet to load</div>
+      <div class="hdr-title" id="hdrTitle">SJP Dashboard</div>
+      <div class="hdr-sub" id="hdrSub">MIS Dashboard · Select a sheet</div>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
@@ -687,27 +687,6 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div id="sheetListEl"><div style="text-align:center;padding:24px;color:var(--m1);font-size:12px">No sheets added yet. Click "+ Add Sheet" to connect your first month.</div></div>
-  </div>
-  <div class="card card-body" style="margin-bottom:12px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <span style="background:#2d1f4e;color:var(--pur);padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700">CSV</span>
-      <span style="font-size:13px;font-weight:700">Upload CSV File</span>
-    </div>
-    <div class="dropzone" id="dropZoneEl" onclick="document.getElementById('csvFileInput').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleDrop(event)">
-      <div style="font-size:26px;margin-bottom:8px">📂</div>
-      <div style="font-size:13px;font-weight:600;color:var(--txt)">Tap to choose CSV</div>
-      <div style="font-size:11px;color:var(--m1);margin-top:4px">or drag &amp; drop</div>
-    </div>
-    <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleFile(this.files[0])">
-    <div id="uploadMsg" style="font-size:12px;margin-top:10px;line-height:1.6"></div>
-  </div>
-  <div id="previewSection" style="display:none" class="card card-body">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:700">📋 Data Preview</div>
-      <div id="previewCountBadge" style="font-size:10px;font-weight:700;color:var(--grn)"></div>
-    </div>
-    <div class="tbl-scroll" style="max-height:200px;overflow-y:auto"><table id="previewTable" style="min-width:200px"></table></div>
-    <button class="btn btn-primary" style="margin-top:12px" onclick="applyToBoard()">✅ Apply to Dashboard</button>
   </div>
   <div style="font-family:'DM Mono',monospace;background:var(--s2);padding:9px 12px;border-radius:8px;font-size:11px;color:var(--amb);margin-top:12px" id="srcInfoEl">No data synced yet</div>
 </div>

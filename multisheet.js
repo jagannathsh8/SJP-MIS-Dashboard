@@ -9,10 +9,51 @@ var DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxKEGzsKYdRMFxA1n
 function loadRegistry(){
   try { SHEET_REGISTRY = JSON.parse(localStorage.getItem('sjp_outlets')||'[]'); } catch(e){ SHEET_REGISTRY=[]; }
   activeSheetId = localStorage.getItem('sjp_active_outlet')||'';
+  
+  // Auto-select latest sheet if none active
+  if(!activeSheetId && SHEET_REGISTRY.length) {
+    // We'll pick the last one added as the "latest"
+    var last = SHEET_REGISTRY[SHEET_REGISTRY.length-1];
+    var tabs = Object.keys(SHEET_DATA).filter(function(k){ return SHEET_DATA[k].outletId === last.id; });
+    if(tabs.length) activeSheetId = tabs[tabs.length-1];
+  }
 }
 function saveRegistry(){
   localStorage.setItem('sjp_outlets', JSON.stringify(SHEET_REGISTRY));
   localStorage.setItem('sjp_active_outlet', activeSheetId);
+}
+
+function switchActiveSheet(id){
+  if(!SHEET_DATA[id]) return;
+  activeSheetId = id;
+  saveRegistry();
+  
+  var d = SHEET_DATA[id];
+  // Inject into global arrays
+  DATES.length=0; d.DATES.forEach(function(x){ DATES.push(x); });
+  REV.length=0; d.REV.forEach(function(x){ REV.push(x); });
+  RM.length=0; d.RM.forEach(function(x){ RM.push(x); });
+  CP.length=0; d.CP.forEach(function(x){ CP.push(x); });
+  PKG.length=0; d.PKG.forEach(function(x){ PKG.push(x); });
+  HK.length=0; d.HK.forEach(function(x){ HK.push(x); });
+  GASU.length=0; d.GASU.forEach(function(x){ GASU.push(x); });
+  GASV.length=0; d.GASV.forEach(function(x){ GASV.push(x); });
+  WATQ.length=0; d.WATQ.forEach(function(x){ WATQ.push(x); });
+  WATV.length=0; d.WATV.forEach(function(x){ WATV.push(x); });
+  PETTY.length=0; d.PETTY.forEach(function(x){ PETTY.push(x); });
+  
+  // Inject targets
+  window.DYNAMIC_DATA = d.DYNAMIC;
+  window.TARGETS = d.TARGETS;
+  window.RUN_RATES = d.RUN_RATES;
+  window.MTDS = d.MTDS;
+  window.TARGET = d.TARGET;
+  window.MONTH_DAYS = d.MONTH_DAYS;
+  
+  killAllCharts();
+  Object.keys(builtPages).forEach(function(k){ delete builtPages[k]; });
+  renderUI();
+  setTimeout(function(){ buildPageCharts('overview'); }, 80);
 }
 
 // ── Parse multi-tab Apps Script JSON into data objects ──
@@ -307,7 +348,6 @@ async function syncOneSheet(id){
     if((!activeSheetId || activeSheetId.indexOf(id)===0) && savedKeys.length){
       switchActiveSheet(savedKeys[savedKeys.length-1]); // switch to the latest added tab
     }
-    showToast('[OK] '+s.label+' synced!');
   } catch(e){
     showToast('[ERR] Failed: '+e.message);
   }
