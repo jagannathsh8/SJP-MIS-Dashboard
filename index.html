@@ -81,28 +81,13 @@ html,body{min-height:100%;background:#07090f;color:#f1f5f9;font-family:'DM Sans'
   }
 }
 table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:600px}
-th{padding:10px 12px;text-align:left;color:var(--m1);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--s2);white-space:nowrap;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--b2)}
+th{padding:10px 12px;text-align:left;color:var(--m1);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;background:var(--s2);white-space:nowrap;border-bottom:1px solid var(--b2)}
 th.num,td.num{text-align:right}
 td{padding:12px 12px;border-bottom:1px solid var(--b1);color:var(--m2);white-space:nowrap;background:var(--s1)}
 tbody tr:last-child td{border-bottom:none}
-.tfoot td{background:var(--s2)!important;border-top:2px solid var(--b2);font-weight:700;color:var(--txt);font-family:'DM Mono',monospace;font-size:11px;position:sticky;bottom:0;z-index:100}
+.tfoot td{background:var(--s2)!important;border-top:2px solid var(--b2);font-weight:700;color:var(--txt);font-family:'DM Mono',monospace;font-size:11px}
 
-/* Ultra-slim Sticky Date Column */
-#dailyLogTbl td:first-child, 
-#dailyLogHead th:first-child, 
-#dailyLogFoot td:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 150;
-  background: #0d1117; /* Solid background to prevent overlap */
-  border-right: 1px solid var(--b2);
-  min-width: 70px;
-  max-width: 70px;
-}
-#dailyLogHead th:first-child, #dailyLogFoot td:first-child {
-  background: #111827;
-  z-index: 160;
-}
+
 
 .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
 .tag-g{background:#14532d;color:#86efac}.tag-r{background:#450a0a;color:#fca5a5}.tag-a{background:#451a03;color:#fcd34d}.tag-m{background:var(--s2);color:var(--m1)}
@@ -1758,15 +1743,30 @@ function expandChart(chartId, title){
   if(fsChart) fsChart.destroy();
   var ctx = document.getElementById('fsCanvas').getContext('2d');
   
-  // Clone the config
-  var cfg = JSON.parse(JSON.stringify(orig.config));
-  cfg.options.maintainAspectRatio = false;
-  cfg.options.plugins.legend = { display: true, position: 'bottom', labels: { color: '#94a3b8', font: { size: 12 } } };
-  cfg.options.scales.x.ticks.font = { size: 11 };
-  cfg.options.scales.y.ticks.font = { size: 11 };
+  // Robust config copy (avoid JSON.stringify on complex Chart configs)
+  var cfg = {
+    type: orig.config.type,
+    data: orig.data,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { color: '#94a3b8', font: { size: 12 } } },
+        tooltip: { enabled: true }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(26,34,53,0.7)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(26,34,53,0.7)' }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+      }
+    }
+  };
   
-  // Data doesn't JSON stringify well if it has circular refs, so we re-assign datasets
-  cfg.data = orig.data;
+  // Add special formatting for Y axis if it looks like revenue
+  if(cfg.type === 'line' || cfg.type === 'bar') {
+    cfg.options.scales.y.ticks.callback = function(v){ 
+      return v >= 1000 ? (v/100000).toFixed(1)+'L' : v; 
+    };
+  }
   
   fsChart = new Chart(ctx, cfg);
 }
