@@ -1777,7 +1777,32 @@ function closeFS(){
   } catch(e){}
 }
 
-// 13. BOOT — handled in multisheet.js
+// 13. BOOT
+document.addEventListener('DOMContentLoaded', function(){
+  // Navigation
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.onclick = function(){
+      var page = this.getAttribute('data-page');
+      if(!page) return;
+      
+      // Update UI
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('page-'+page).classList.add('active');
+      
+      // Build charts for page
+      setTimeout(function(){ buildPageCharts(page); }, 50);
+      
+      // Scroll to top
+      window.scrollTo({top:0, behavior:'smooth'});
+    };
+  });
+
+  // Initial load
+  refreshKeyBadge();
+});
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('./sw.js').then(function(reg) {
