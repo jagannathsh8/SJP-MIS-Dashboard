@@ -180,14 +180,13 @@ function switchActiveSheet(compositeId){
   var d = SHEET_DATA[compositeId];
   var entry = SHEET_REGISTRY.find(function(s){return s.id===d.outletId;});
   // Update header
-  document.getElementById('hdrTitle').innerHTML = (entry?entry.label:'Dashboard')+' - '+d.tabName+' <span class="live-badge">LIVE</span>';
+  document.getElementById('hdrTitle').innerHTML = (entry?entry.label:'Dashboard')+' - '+d.tabName;
   document.getElementById('hdrSub').textContent = 'MIS Dashboard · '+DATES.length+' days · Jagan';
   killAllCharts();
   Object.keys(builtPages).forEach(function(k){ delete builtPages[k]; });
   renderUI();
   setTimeout(function(){ buildPageCharts('overview'); },80);
   document.getElementById('srcInfoEl').textContent = 'Active: '+(entry?entry.label:'')+' ('+d.tabName+') · '+DATES.length+' days';
-  showToast('Switched to '+(entry?entry.label:'')+' - '+d.tabName);
 }
 
 // ── Render outlet list on Data Source page ──
