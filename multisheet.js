@@ -4,6 +4,7 @@ var SHEET_COLORS = ['#f59e0b','#60a5fa','#22c55e','#a78bfa','#f87171','#38bdf8',
 var SHEET_DATA = {};
 var SHEET_REGISTRY = [];
 var activeSheetId = '';
+var DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxKEGzsKYdRMFxA1nWjVtifaPMxSzS7Pqqi-lL33UqlRlP--FI1oQK6eDiyvI1zPLVI/exec';
 
 function loadRegistry(){
   try { SHEET_REGISTRY = JSON.parse(localStorage.getItem('sjp_outlets')||'[]'); } catch(e){ SHEET_REGISTRY=[]; }
@@ -576,7 +577,7 @@ function runMonthVsMonth(){
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function(){
   loadRegistry();
-  refreshKeyBadge();
+  if(window.refreshKeyBadge) refreshKeyBadge();
   renderSheetList();
   renderSheetDropdown();
   populateAnaSelectors();
