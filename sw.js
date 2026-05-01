@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sjp-mis-v1';
+const CACHE_NAME = 'sjp-mis-v5';
 const ASSETS = [
   './index.html',
   './multisheet.js',

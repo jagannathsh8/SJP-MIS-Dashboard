@@ -98,16 +98,18 @@ tbody tr:last-child td{border-bottom:none}
 .tfoot td{background:var(--s2)!important;border-top:2px solid var(--b2);font-weight:700;color:var(--txt);font-family:'DM Mono',monospace;font-size:11px}
 
 /* ─ STICKY ─ */
+#dailyLogHead th, #dailyLogTbl td, #dailyLogFoot td { position: static !important; } /* Reset all first */
+#dailyLogHead th { position: sticky !important; top: 0; z-index: 100; background: var(--s2); }
 #dailyLogHead th:first-child,
 #dailyLogTbl td:first-child,
 #dailyLogFoot td:first-child {
-  position: sticky;
+  position: sticky !important;
   left: 0;
   z-index: 120;
-  background: #0d1117;
+  background: #0d1117 !important;
   border-right: 1px solid var(--b2);
 }
-#dailyLogHead th:first-child { z-index: 130; background: #111827; }
+#dailyLogHead th:first-child { z-index: 130; background: #111827 !important; }
 
 .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
 .tag-g{background:#14532d;color:#86efac}.tag-r{background:#450a0a;color:#fca5a5}.tag-a{background:#451a03;color:#fcd34d}.tag-m{background:var(--s2);color:var(--m1)}
