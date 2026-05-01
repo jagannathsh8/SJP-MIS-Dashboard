@@ -14,7 +14,7 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{min-height:100%;background:#07090f;color:#f1f5f9;font-family:'DM Sans',sans-serif;font-size:14px}
+html,body{min-height:100%;background:#07090f;color:#f1f5f9;font-family:'DM Sans',sans-serif;font-size:14px;overscroll-behavior-y:none}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#2d3748;border-radius:4px}
 
 /* ─ VARIABLES ─ */
@@ -38,7 +38,7 @@ html,body{min-height:100%;background:#07090f;color:#f1f5f9;font-family:'DM Sans'
 .nav-btn.active{color:var(--amb);border-bottom-color:var(--amb)}
 
 /* ─ MAIN ─ */
-.main{padding:16px;max-width:960px;margin:0 auto}
+.main{padding:16px;max-width:960px;margin:0 auto;padding-bottom:80px}
 .page{display:none}.page.active{display:block}
 
 /* ─ CARDS ─ */
@@ -62,13 +62,27 @@ html,body{min-height:100%;background:#07090f;color:#f1f5f9;font-family:'DM Sans'
 .prog-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--m1)}
 
 /* ─ TABLES ─ */
-.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}
-th{padding:12px 14px;text-align:left;color:var(--m1);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--bg);white-space:nowrap}
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;background:var(--s1);border:1px solid var(--b1)}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;min-width:480px}
+th{padding:12px 14px;text-align:left;color:var(--m1);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;background:var(--s2);white-space:nowrap;position:sticky;top:0;z-index:10}
 th.num,td.num{text-align:right}
-td{padding:12px 14px;border-bottom:1px solid var(--b1);color:var(--m2);white-space:nowrap}
+td{padding:14px 14px;border-bottom:1px solid var(--b1);color:var(--m2);white-space:nowrap;background:var(--s1)}
 tbody tr:last-child td{border-bottom:none}
-.tfoot td{background:var(--bg)!important;border-top:2px solid var(--b2);font-weight:700;color:var(--txt);font-family:'DM Mono',monospace;font-size:11px}
+.tfoot td{background:var(--s2)!important;border-top:2px solid var(--b2);font-weight:700;color:var(--txt);font-family:'DM Mono',monospace;font-size:11px;position:sticky;bottom:0;z-index:10}
+
+/* Sticky first column for Daily Log */
+#dailyLogTbl td:first-child, #dailyLogHead th:first-child, #dailyLogFoot td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--s1);
+  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+}
+#dailyLogHead th:first-child, #dailyLogFoot td:first-child {
+  background: var(--s2);
+  z-index: 30;
+}
+
 .tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
 .tag-g{background:#14532d;color:#86efac}.tag-r{background:#450a0a;color:#fca5a5}.tag-a{background:#451a03;color:#fcd34d}.tag-m{background:var(--s2);color:var(--m1)}
 
@@ -141,6 +155,35 @@ tbody tr:last-child td{border-bottom:none}
 
 /* Mobile adjustments */
 @media(max-width:600px){
+  .nav {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    border-top: 1px solid var(--b1);
+    border-bottom: none;
+    justify-content: space-around;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+  }
+  .nav-btn {
+    flex-direction: column;
+    padding: 10px 5px;
+    font-size: 10px;
+    gap: 4px;
+    border-bottom: none;
+  }
+  .nav-btn.active {
+    color: var(--amb);
+    background: rgba(245,158,11,0.05);
+  }
+  .hdr {
+    padding: 15px 16px;
+  }
+  .main {
+    padding-bottom: 100px;
+  }
+  
   .ana-picker{flex-direction:column;gap:12px}
   #anaDateResult .card-body, #anaWeekResult .card-body { padding: 12px !important; }
   .cmp-grid-header, .cmp-grid-row { 
