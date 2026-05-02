@@ -611,6 +611,11 @@ tbody tr:last-child td{border-bottom:none}
         <span style="font-size:10px;color:var(--m1)">to</span>
         <input type="date" id="teamEnd" class="inp" style="width:auto;font-size:11px;padding:3px 6px;height:auto" onchange="buildTeamCharts()">
       </div>
+      <select id="teamOutletSlicer" class="inp" style="width:auto;font-size:11px;padding:4px 10px;height:auto" onchange="buildTeamCharts()">
+        <option value="all">All Outlets</option>
+        <option value="varthur">Varthur</option>
+        <option value="sjp">SJP</option>
+      </select>
       <select id="teamTimeSlicer" class="inp" style="width:auto;font-size:11px;padding:4px 10px;height:auto" onchange="toggleTeamRange(this.value)">
         <option value="all">All Time</option>
         <option value="7d">Last 7 Days</option>

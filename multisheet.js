@@ -655,10 +655,18 @@ function buildTeamCharts() {
   
   var raw = window.TEAM_DATA;
   var filter = document.getElementById('teamTimeSlicer') ? document.getElementById('teamTimeSlicer').value : 'all';
+  var outletFilter = document.getElementById('teamOutletSlicer') ? document.getElementById('teamOutletSlicer').value : 'all';
   var now = new Date();
   
   // Filter Data
   var data = raw.filter(function(r){
+    // 1. Outlet Filter
+    if(outletFilter !== 'all') {
+      var loc = String(r['Work Location'] || r['Location'] || '').toLowerCase();
+      if(loc.indexOf(outletFilter) === -1) return false;
+    }
+
+    // 2. Time Filter
     if(filter === 'all') return true;
     var keys = Object.keys(r);
     // Fuzzy search for Joining Date
