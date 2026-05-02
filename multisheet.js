@@ -619,15 +619,20 @@ function runMonthVsMonth(){
 function parseSheetDate(val) {
   if(!val) return null;
   if(val instanceof Date) return val;
-  var d = new Date(val);
+  var s = String(val).trim();
+  if(!s) return null;
+
+  var d = new Date(s);
   if(!isNaN(d.getTime())) return d;
   
   // Try DD/MM/YYYY or DD-MM-YYYY
-  var parts = String(val).split(/[-/]/);
+  var parts = s.split(/[-/]/);
   if(parts.length === 3) {
-    // Check if first part is day or year
-    if(parts[0].length === 4) return new Date(parts[0], parts[1]-1, parts[2]);
-    return new Date(parts[2], parts[1]-1, parts[0]);
+    var p0=parseInt(parts[0]), p1=parseInt(parts[1]), p2=parseInt(parts[2]);
+    // Check if first part is year (YYYY-MM-DD)
+    if(parts[0].length === 4) return new Date(p0, p1-1, p2);
+    // Else assume DD-MM-YYYY
+    return new Date(p2, p1-1, p0);
   }
   return null;
 }
@@ -649,7 +654,7 @@ function buildTeamCharts() {
   // Filter Data
   var data = raw.filter(function(r){
     if(filter === 'all') return true;
-    var dtStr = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
+    var dtStr = r['Date of Joining'] || r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
     var d = parseSheetDate(dtStr);
     if(!d) return filter === 'all';
     
@@ -671,33 +676,43 @@ function buildTeamCharts() {
   
   // Aggregates
   var locMap = {}, monthMap = {}, refMap = {}, desigMap = {};
+  var idToName = {};
+
   data.forEach(function(r){
     // Location
     var loc = r['Location'] || r['Work Location'] || r['Store'] || 'Unknown';
     locMap[loc] = (locMap[loc]||0) + 1;
     
     // Designation
-    var des = r['Designation'] || r['Role'] || r['Dept'] || 'Other';
+    var des = r['Designation'] || r['Role'] || r['Dept'] || r['Designation '] || 'Other';
     desigMap[des] = (desigMap[des]||0) + 1;
     
-    // Referral (Column H priority or header)
-    var rKeys = Object.keys(r);
-    var rawRef = String(r[rKeys[7]] || r['Referred By'] || r['Reference'] || 'Direct').trim();
+    // Referral Logic
+    var rawRef = '';
+    // Look for Column H or "Referred By"
+    var keys = Object.keys(r);
+    var refKeyHeader = keys.find(k => k.toLowerCase().indexOf('refer') !== -1) || keys[7];
+    rawRef = String(r[refKeyHeader] || '').trim();
     
     var refKey = 'Direct';
-    if(rawRef && rawRef.toLowerCase() !== 'direct') {
-      // Logic: Look for Employee ID (Minimum 4 digits)
+    if(rawRef && rawRef.toLowerCase() !== 'direct' && rawRef.toLowerCase() !== 'n/a') {
       var idMatch = rawRef.match(/\d{4,}/);
       if(idMatch) {
-        refKey = 'ID: ' + idMatch[0]; // Group by ID to ignore spelling differences
+        var id = idMatch[0];
+        refKey = 'ID: ' + id;
+        // Keep track of a name associated with this ID if possible
+        if(!idToName[id]) {
+          var nameOnly = rawRef.replace('Id no - ','').replace('name - ','').replace('Name - ','').replace(id, '').replace(/[-]/g,'').trim();
+          if(nameOnly) idToName[id] = nameOnly;
+        }
       } else {
-        refKey = rawRef; // Fallback to name if no ID found
+        refKey = rawRef;
       }
     }
     refMap[refKey] = (refMap[refKey]||0) + 1;
     
     // Months
-    var dt = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
+    var dt = r['Date of Joining'] || r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
     var mLabel = 'Unknown';
     if(dt) {
       var dObj = new Date(dt);
@@ -743,7 +758,7 @@ function buildTeamCharts() {
   });
 
   killChart('chTeamMonth');
-  var mKeys = Object.keys(monthMap);
+  var mKeys = Object.keys(monthMap).sort((a,b)=>new Date('01 '+a)-new Date('01 '+b));
   var cMonth = document.getElementById('chartTeamMonth');
   if(cMonth) CI.chTeamMonth = new Chart(cMonth, {
     type:'bar', data:{
@@ -754,15 +769,24 @@ function buildTeamCharts() {
   });
 
   killChart('chTeamRef');
-  var rKeys = Object.keys(refMap).filter(k=>k.toLowerCase()!=='direct').sort((a,b)=>refMap[b]-refMap[a]).slice(0,8);
+  var rKeysRaw = Object.keys(refMap).filter(k=>k.toLowerCase()!=='direct' && k.toLowerCase()!=='n/a' && k!=='0' && k!=='');
+  var rKeys = rKeysRaw.sort((a,b)=>refMap[b]-refMap[a]).slice(0,8);
   var cRef = document.getElementById('chartTeamRef');
-  if(cRef) CI.chTeamRef = new Chart(cRef, {
-    type:'bar', data:{
-      labels:rKeys, 
-      datasets:[{label:'Referrals', data:rKeys.map(k=>refMap[k]), backgroundColor:'#a78bfa', borderRadius:4}]
-    },
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{display:false},ticks:{color:'#64748b'}}}}
-  });
+  if(cRef) {
+    CI.chTeamRef = new Chart(cRef, {
+      type:'bar', data:{
+        labels: rKeys.map(function(k){
+          if(k.startsWith('ID: ')) {
+            var id = k.replace('ID: ','');
+            return (idToName[id] ? idToName[id] + ' ('+id+')' : k);
+          }
+          return k;
+        }), 
+        datasets:[{label:'Referrals', data:rKeys.map(k=>refMap[k]), backgroundColor:'#a78bfa', borderRadius:4}]
+      },
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{display:false},ticks:{color:'#64748b'}}}}
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════
