@@ -625,14 +625,20 @@ function parseSheetDate(val) {
   var d = new Date(s);
   if(!isNaN(d.getTime())) return d;
   
-  // Try DD/MM/YYYY or DD-MM-YYYY
-  var parts = s.split(/[-/]/);
+  // Try DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  var parts = s.split(/[-/.]/);
   if(parts.length === 3) {
     var p0=parseInt(parts[0]), p1=parseInt(parts[1]), p2=parseInt(parts[2]);
+    var y = p2, m = p1, day = p0;
+    
     // Check if first part is year (YYYY-MM-DD)
-    if(parts[0].length === 4) return new Date(p0, p1-1, p2);
-    // Else assume DD-MM-YYYY
-    return new Date(p2, p1-1, p0);
+    if(parts[0].length === 4) { y=p0; m=p1; day=p2; }
+    
+    // Handle 2-digit year (e.g., 26 -> 2026)
+    if(y < 100) y += 2000;
+    
+    var finalD = new Date(y, m-1, day);
+    return isNaN(finalD.getTime()) ? null : finalD;
   }
   return null;
 }
@@ -654,18 +660,34 @@ function buildTeamCharts() {
   // Filter Data
   var data = raw.filter(function(r){
     if(filter === 'all') return true;
-    var dtStr = r['Date of Joining'] || r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
+    var keys = Object.keys(r);
+    // Fuzzy search for Joining Date
+    var dKey = keys.find(k => k.toLowerCase().indexOf('joining')!==-1 || k.toLowerCase().indexOf('hired')!==-1 || k.toLowerCase()==='date');
+    var dtStr = r[dKey] || '';
+    
     var d = parseSheetDate(dtStr);
     if(!d) return filter === 'all';
     
-    if(filter === '7d') return (now - d) <= (7 * 24 * 60 * 60 * 1000);
+    // Normalize to midnight for clean comparison
+    var dNorm = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    var nowNorm = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    if(filter === '7d') return (nowNorm - dNorm) <= (7 * 24 * 60 * 60 * 1000);
     if(filter === 'mtd') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    if(filter === '3m') return (now - d) <= (90 * 24 * 60 * 60 * 1000);
+    if(filter === 'lm') {
+      var lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear();
+    }
+    if(filter === '3m') return (nowNorm - dNorm) <= (90 * 24 * 60 * 60 * 1000);
     if(filter === 'custom') {
-      var start = parseSheetDate(document.getElementById('teamStart').value);
-      var end = parseSheetDate(document.getElementById('teamEnd').value);
+      var sVal = document.getElementById('teamStart').value;
+      var eVal = document.getElementById('teamEnd').value;
+      if(!sVal || !eVal) return true;
+      var start = parseSheetDate(sVal), end = parseSheetDate(eVal);
       if(!start || !end) return true;
-      return d >= start && d <= end;
+      var sNorm = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+      var eNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+      return dNorm >= sNorm && dNorm <= eNorm;
     }
     return true;
   });
@@ -689,24 +711,20 @@ function buildTeamCharts() {
     
     // Referral Logic
     var rawRef = '';
-    // Look for Column H or "Referred By"
     var keys = Object.keys(r);
     var refKeyHeader = keys.find(k => k.toLowerCase().indexOf('refer') !== -1) || keys[7];
     rawRef = String(r[refKeyHeader] || '').trim();
     
-    var refKey = 'Direct';
-    if(rawRef && rawRef.toLowerCase() !== 'direct' && rawRef.toLowerCase() !== 'n/a') {
+    var refKey = 'HR'; // Default to HR
+    if(rawRef && rawRef.toLowerCase() !== 'direct' && rawRef.toLowerCase() !== 'n/a' && rawRef !== '0') {
       var idMatch = rawRef.match(/\d{4,}/);
       if(idMatch) {
         var id = idMatch[0];
         refKey = 'ID: ' + id;
-        // Keep track of a name associated with this ID if possible
         if(!idToName[id]) {
           var nameOnly = rawRef.replace('Id no - ','').replace('name - ','').replace('Name - ','').replace(id, '').replace(/[-]/g,'').trim();
           if(nameOnly) idToName[id] = nameOnly;
         }
-      } else {
-        refKey = rawRef;
       }
     }
     refMap[refKey] = (refMap[refKey]||0) + 1;
@@ -715,18 +733,28 @@ function buildTeamCharts() {
     var dt = r['Date of Joining'] || r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
     var mLabel = 'Unknown';
     if(dt) {
-      var dObj = new Date(dt);
-      if(!isNaN(dObj.getTime())) mLabel = dObj.toLocaleString('default', { month: 'short', year: '2-digit' });
+      var dObj = parseSheetDate(dt);
+      if(dObj) mLabel = dObj.toLocaleString('default', { month: 'short', year: '2-digit' });
     }
     monthMap[mLabel] = (monthMap[mLabel]||0) + 1;
   });
+
+  // Top 3 Referrers
+  var top3List = Object.keys(refMap)
+    .filter(function(k){ return k.startsWith('ID: '); })
+    .sort(function(a,b){ return refMap[b] - refMap[a]; })
+    .slice(0, 3)
+    .map(function(k){
+      var id = k.replace('ID: ','');
+      return (idToName[id] || id) + ' ('+refMap[k]+')';
+    }).join(', ');
 
   // KPIs
   var teamKpis = [
     {l:'TOTAL EMPLOYEES', v:total, s:'Active on roster', c:'#60a5fa'},
     {l:'TOTAL LOCATIONS', v:Object.keys(locMap).length, s:'Total Branches', c:'#22c55e'},
-    {l:'REFERRAL RATE',   v:((Object.keys(refMap).filter(k=>k.toLowerCase()!=='direct').length/total)*100).toFixed(0)+'%', s:'Employee referrals', c:'#a78bfa'},
-    {l:'NEW ONBOARDED',   v:monthMap[new Date().toLocaleString('default',{month:'short',year:'2-digit'})]||0, s:'This month', c:'#f59e0b'}
+    {l:'NEW ONBOARDED',   v:monthMap[new Date().toLocaleString('default',{month:'short',year:'2-digit'})]||0, s:'This month', c:'#f59e0b'},
+    {l:'TOP REFERRERS',   v:top3List || 'None', s:'Top 3 performers', c:'#a78bfa'}
   ];
   var kpiEl = document.getElementById('teamKpiGrid');
   if(kpiEl) kpiEl.innerHTML = teamKpis.map(function(k){
