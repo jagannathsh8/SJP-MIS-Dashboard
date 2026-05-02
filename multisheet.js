@@ -616,8 +616,24 @@ function runMonthVsMonth(){
     scales:{x:{grid:{color:'rgba(26,34,53,0.7)'},ticks:{maxTicksLimit:8}},y:{grid:{color:'rgba(26,34,53,0.7)'},ticks:{callback:function(v){return v+'%';}},suggestedMax:45}}}});
 }
 
+function parseSheetDate(val) {
+  if(!val) return null;
+  if(val instanceof Date) return val;
+  var d = new Date(val);
+  if(!isNaN(d.getTime())) return d;
+  
+  // Try DD/MM/YYYY or DD-MM-YYYY
+  var parts = String(val).split(/[-/]/);
+  if(parts.length === 3) {
+    // Check if first part is day or year
+    if(parts[0].length === 4) return new Date(parts[0], parts[1]-1, parts[2]);
+    return new Date(parts[2], parts[1]-1, parts[0]);
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════
-// BOOT
+// TEAM DASHBOARD LOGIC
 // ═══════════════════════════════════════════════
 function buildTeamCharts() {
   if(!window.TEAM_DATA || !window.TEAM_DATA.length) {
@@ -634,15 +650,22 @@ function buildTeamCharts() {
   var data = raw.filter(function(r){
     if(filter === 'all') return true;
     var dtStr = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
-    if(!dtStr) return filter === 'all';
-    var d = new Date(dtStr);
-    if(isNaN(d.getTime())) return true;
+    var d = parseSheetDate(dtStr);
+    if(!d) return filter === 'all';
     
     if(filter === '7d') return (now - d) <= (7 * 24 * 60 * 60 * 1000);
-    if(filter === '30d') return (now - d) <= (30 * 24 * 60 * 60 * 1000);
-    if(filter === 'month') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if(filter === 'mtd') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if(filter === '3m') return (now - d) <= (90 * 24 * 60 * 60 * 1000);
+    if(filter === 'custom') {
+      var start = parseSheetDate(document.getElementById('teamStart').value);
+      var end = parseSheetDate(document.getElementById('teamEnd').value);
+      if(!start || !end) return true;
+      return d >= start && d <= end;
+    }
     return true;
   });
+
+  window.LAST_FILTERED_TEAM = data;
 
   var total = data.length;
   
@@ -659,9 +682,19 @@ function buildTeamCharts() {
     
     // Referral (Column H priority or header)
     var rKeys = Object.keys(r);
-    var ref = r[rKeys[7]] || r['Referred By'] || r['Reference'] || 'Direct'; 
-    if(!ref || String(ref).trim()==='') ref = 'Direct';
-    refMap[ref] = (refMap[ref]||0) + 1;
+    var rawRef = String(r[rKeys[7]] || r['Referred By'] || r['Reference'] || 'Direct').trim();
+    
+    var refKey = 'Direct';
+    if(rawRef && rawRef.toLowerCase() !== 'direct') {
+      // Logic: Look for Employee ID (Minimum 4 digits)
+      var idMatch = rawRef.match(/\d{4,}/);
+      if(idMatch) {
+        refKey = 'ID: ' + idMatch[0]; // Group by ID to ignore spelling differences
+      } else {
+        refKey = rawRef; // Fallback to name if no ID found
+      }
+    }
+    refMap[refKey] = (refMap[refKey]||0) + 1;
     
     // Months
     var dt = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';

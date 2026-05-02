@@ -603,14 +603,23 @@ tbody tr:last-child td{border-bottom:none}
 <!-- ══════════ TEAM / EMPLOYEES ══════════ -->
 <div class="page" id="page-team">
   <div style="font-size:17px;font-weight:800;margin-bottom:4px">🧑‍🤝‍🧑 Team & Employee Insights</div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px">
-    <div style="font-size:11px;color:var(--m1)">Onboarding analytics and employee distribution.</div>
-    <select id="teamTimeSlicer" class="inp" style="width:auto;font-size:11px;padding:4px 10px;height:auto" onchange="buildTeamCharts()">
-      <option value="all">All Time</option>
-      <option value="7d">Last 7 Days</option>
-      <option value="30d">Last 30 Days</option>
-      <option value="month">This Month</option>
-    </select>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+    <div style="font-size:11px;color:var(--m1);flex:1;min-width:200px">Onboarding analytics and employee distribution.</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div id="teamRangeWrap" style="display:none;gap:6px;align-items:center">
+        <input type="date" id="teamStart" class="inp" style="width:auto;font-size:11px;padding:3px 6px;height:auto" onchange="buildTeamCharts()">
+        <span style="font-size:10px;color:var(--m1)">to</span>
+        <input type="date" id="teamEnd" class="inp" style="width:auto;font-size:11px;padding:3px 6px;height:auto" onchange="buildTeamCharts()">
+      </div>
+      <select id="teamTimeSlicer" class="inp" style="width:auto;font-size:11px;padding:4px 10px;height:auto" onchange="toggleTeamRange(this.value)">
+        <option value="all">All Time</option>
+        <option value="7d">Last 7 Days</option>
+        <option value="mtd">This Month (MTD)</option>
+        <option value="3m">Last 3 Months</option>
+        <option value="custom">Custom Range...</option>
+      </select>
+      <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="exportTeamData()">📥 Export CSV</button>
+    </div>
   </div>
   
   <div class="kpi-grid" id="teamKpiGrid"></div>
@@ -1859,6 +1868,33 @@ document.addEventListener('DOMContentLoaded', function(){
   // Initial load
   refreshKeyBadge();
 });
+
+function toggleTeamRange(val){
+  document.getElementById('teamRangeWrap').style.display = (val==='custom'?'flex':'none');
+  buildTeamCharts();
+}
+
+function exportTeamData(){
+  if(!window.LAST_FILTERED_TEAM || !window.LAST_FILTERED_TEAM.length) { showToast('No data to export.'); return; }
+  var data = window.LAST_FILTERED_TEAM;
+  var headers = Object.keys(data[0]);
+  var csv = headers.join(',') + '\n';
+  data.forEach(function(row){
+    csv += headers.map(function(h){ 
+      var val = String(row[h]||'').replace(/,/g, ';');
+      return '"' + val + '"';
+    }).join(',') + '\n';
+  });
+  var blob = new Blob([csv], {type:'text/csv'});
+  var url = window.URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.setAttribute('hidden', '');
+  a.setAttribute('href', url);
+  a.setAttribute('download', 'Employee_Export_' + new Date().toLocaleDateString() + '.csv');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
