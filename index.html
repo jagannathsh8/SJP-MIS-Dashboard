@@ -603,7 +603,15 @@ tbody tr:last-child td{border-bottom:none}
 <!-- ══════════ TEAM / EMPLOYEES ══════════ -->
 <div class="page" id="page-team">
   <div style="font-size:17px;font-weight:800;margin-bottom:4px">🧑‍🤝‍🧑 Team & Employee Insights</div>
-  <div style="font-size:11px;color:var(--m1);margin-bottom:16px">Onboarding analytics and employee distribution from "Employee onboarding data".</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px">
+    <div style="font-size:11px;color:var(--m1)">Onboarding analytics and employee distribution.</div>
+    <select id="teamTimeSlicer" class="inp" style="width:auto;font-size:11px;padding:4px 10px;height:auto" onchange="buildTeamCharts()">
+      <option value="all">All Time</option>
+      <option value="7d">Last 7 Days</option>
+      <option value="30d">Last 30 Days</option>
+      <option value="month">This Month</option>
+    </select>
+  </div>
   
   <div class="kpi-grid" id="teamKpiGrid"></div>
 
@@ -621,6 +629,14 @@ tbody tr:last-child td{border-bottom:none}
         <button class="exp-btn" onclick="expandChart('chTeamMonth', 'Hiring Trend')">⛶</button>
         <div style="position:relative;height:220px"><canvas id="chartTeamMonth"></canvas></div>
       </div>
+    </div>
+  </div>
+
+  <div class="card card-body" style="margin-top:12px">
+    <div class="card-title">Designation Distribution</div>
+    <div class="chart-wrap">
+      <button class="exp-btn" onclick="expandChart('chTeamDesig', 'Designation Distribution')">⛶</button>
+      <div style="position:relative;height:220px"><canvas id="chartTeamDesig"></canvas></div>
     </div>
   </div>
 

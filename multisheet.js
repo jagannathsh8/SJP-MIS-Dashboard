@@ -626,18 +626,44 @@ function buildTeamCharts() {
     return;
   }
   
-  var data = window.TEAM_DATA;
+  var raw = window.TEAM_DATA;
+  var filter = document.getElementById('teamTimeSlicer') ? document.getElementById('teamTimeSlicer').value : 'all';
+  var now = new Date();
+  
+  // Filter Data
+  var data = raw.filter(function(r){
+    if(filter === 'all') return true;
+    var dtStr = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
+    if(!dtStr) return filter === 'all';
+    var d = new Date(dtStr);
+    if(isNaN(d.getTime())) return true;
+    
+    if(filter === '7d') return (now - d) <= (7 * 24 * 60 * 60 * 1000);
+    if(filter === '30d') return (now - d) <= (30 * 24 * 60 * 60 * 1000);
+    if(filter === 'month') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    return true;
+  });
+
   var total = data.length;
   
   // Aggregates
-  var locMap = {}, monthMap = {}, refMap = {};
+  var locMap = {}, monthMap = {}, refMap = {}, desigMap = {};
   data.forEach(function(r){
+    // Location
     var loc = r['Location'] || r['Work Location'] || r['Store'] || 'Unknown';
     locMap[loc] = (locMap[loc]||0) + 1;
     
-    var ref = r['Referred By'] || r['Reference'] || 'Direct';
+    // Designation
+    var des = r['Designation'] || r['Role'] || r['Dept'] || 'Other';
+    desigMap[des] = (desigMap[des]||0) + 1;
+    
+    // Referral (Column H priority or header)
+    var rKeys = Object.keys(r);
+    var ref = r[rKeys[7]] || r['Referred By'] || r['Reference'] || 'Direct'; 
+    if(!ref || String(ref).trim()==='') ref = 'Direct';
     refMap[ref] = (refMap[ref]||0) + 1;
     
+    // Months
     var dt = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
     var mLabel = 'Unknown';
     if(dt) {
@@ -650,9 +676,9 @@ function buildTeamCharts() {
   // KPIs
   var teamKpis = [
     {l:'TOTAL EMPLOYEES', v:total, s:'Active on roster', c:'#60a5fa'},
-    {l:'TOTAL LOCATIONS', v:Object.keys(locMap).length, s:'SJP Branches', c:'#22c55e'},
-    {l:'REFERRAL RATE',   v:((Object.keys(refMap).filter(k=>k!=='Direct').length/total)*100).toFixed(0)+'%', s:'Employee referrals', c:'#a78bfa'},
-    {l:'NEW THIS MONTH',  v:monthMap[new Date().toLocaleString('default',{month:'short',year:'2-digit'})]||0, s:'Onboarded', c:'#f59e0b'}
+    {l:'TOTAL LOCATIONS', v:Object.keys(locMap).length, s:'Total Branches', c:'#22c55e'},
+    {l:'REFERRAL RATE',   v:((Object.keys(refMap).filter(k=>k.toLowerCase()!=='direct').length/total)*100).toFixed(0)+'%', s:'Employee referrals', c:'#a78bfa'},
+    {l:'NEW ONBOARDED',   v:monthMap[new Date().toLocaleString('default',{month:'short',year:'2-digit'})]||0, s:'This month', c:'#f59e0b'}
   ];
   var kpiEl = document.getElementById('teamKpiGrid');
   if(kpiEl) kpiEl.innerHTML = teamKpis.map(function(k){
@@ -672,6 +698,17 @@ function buildTeamCharts() {
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:10}}}}}
   });
 
+  killChart('chTeamDesig');
+  var cDes = document.getElementById('chartTeamDesig');
+  var desKeys = Object.keys(desigMap).sort((a,b)=>desigMap[b]-desigMap[a]);
+  if(cDes) CI.chTeamDesig = new Chart(cDes, {
+    type:'doughnut', data:{
+      labels:desKeys, 
+      datasets:[{data:desKeys.map(k=>desigMap[k]), backgroundColor:SHEET_COLORS.slice().reverse(), borderWidth:0}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:10}}}}, cutout:'65%'}
+  });
+
   killChart('chTeamMonth');
   var mKeys = Object.keys(monthMap);
   var cMonth = document.getElementById('chartTeamMonth');
@@ -684,12 +721,12 @@ function buildTeamCharts() {
   });
 
   killChart('chTeamRef');
-  var rKeys = Object.keys(refMap).sort((a,b)=>refMap[b]-refMap[a]).slice(0,8);
+  var rKeys = Object.keys(refMap).filter(k=>k.toLowerCase()!=='direct').sort((a,b)=>refMap[b]-refMap[a]).slice(0,8);
   var cRef = document.getElementById('chartTeamRef');
   if(cRef) CI.chTeamRef = new Chart(cRef, {
     type:'bar', data:{
       labels:rKeys, 
-      datasets:[{label:'Count', data:rKeys.map(k=>refMap[k]), backgroundColor:'#a78bfa', borderRadius:4}]
+      datasets:[{label:'Referrals', data:rKeys.map(k=>refMap[k]), backgroundColor:'#a78bfa', borderRadius:4}]
     },
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{display:false},ticks:{color:'#64748b'}}}}
   });
