@@ -328,6 +328,7 @@ tbody tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-page="revenue">💰 Revenue</button>
   <button class="nav-btn" data-page="costs">⚙️ Costs</button>
   <button class="nav-btn" data-page="daily">📅 Daily Log</button>
+  <button class="nav-btn" data-page="team">🧑‍🤝‍🧑 Team</button>
   <button class="nav-btn" data-page="intel">✦ Intelligence</button>
   <button class="nav-btn" data-page="analysis">📈 Analysis</button>
   <button class="nav-btn" data-page="datasrc">🔗 Data Source</button>
@@ -595,6 +596,39 @@ tbody tr:last-child td{border-bottom:none}
         </div>
       </div>
       <div class="out-box" id="txtMessage" style="font-family:'DM Mono',monospace"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TEAM / EMPLOYEES ══════════ -->
+<div class="page" id="page-team">
+  <div style="font-size:17px;font-weight:800;margin-bottom:4px">🧑‍🤝‍🧑 Team & Employee Insights</div>
+  <div style="font-size:11px;color:var(--m1);margin-bottom:16px">Onboarding analytics and employee distribution from "Employee onboarding data".</div>
+  
+  <div class="kpi-grid" id="teamKpiGrid"></div>
+
+  <div class="grid2">
+    <div class="card card-body">
+      <div class="card-title">Location Distribution</div>
+      <div class="chart-wrap">
+        <button class="exp-btn" onclick="expandChart('chTeamLoc', 'Location Distribution')">⛶</button>
+        <div style="position:relative;height:220px"><canvas id="chartTeamLoc"></canvas></div>
+      </div>
+    </div>
+    <div class="card card-body">
+      <div class="card-title">Hiring Trend (Month-wise)</div>
+      <div class="chart-wrap">
+        <button class="exp-btn" onclick="expandChart('chTeamMonth', 'Hiring Trend')">⛶</button>
+        <div style="position:relative;height:220px"><canvas id="chartTeamMonth"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-body" style="margin-top:12px">
+    <div class="card-title">Referral Analytics (Top Referrers)</div>
+    <div class="chart-wrap">
+      <button class="exp-btn" onclick="expandChart('chTeamRef', 'Referral Analytics')">⛶</button>
+      <div style="position:relative;height:220px"><canvas id="chartTeamRef"></canvas></div>
     </div>
   </div>
 </div>
@@ -1199,6 +1233,10 @@ function buildPageCharts(page){
         }
       });
     });
+  }
+
+  if(page === 'team' && window.buildTeamCharts) {
+    buildTeamCharts();
   }
 }
 

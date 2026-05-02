@@ -124,6 +124,11 @@ function parseAppsScriptTabs(json){
       Object.keys(dynamicRows).forEach(function(dr){ dynamicRows[dr].push(getVal(findRow(dr), dKey)); });
     }
     
+    if(tab.name.toLowerCase().indexOf('employee') !== -1) {
+      window.TEAM_DATA = data;
+      return;
+    }
+
     parsedTabs[tab.name] = {
       DATES:nd, REV:nr, RM:nrm, CP:ncp, PKG:npk, HK:nhk, 
       GASU:ngu, GASV:ngv, WATQ:nwq, WATV:nwv, PETTY:npt, 
@@ -614,6 +619,85 @@ function runMonthVsMonth(){
 // ═══════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════
+function buildTeamCharts() {
+  if(!window.TEAM_DATA || !window.TEAM_DATA.length) {
+    var el = document.getElementById('teamKpiGrid');
+    if(el) el.innerHTML = '<div style="padding:20px;color:var(--m1)">Sync "Employee onboarding data" tab to view insights.</div>';
+    return;
+  }
+  
+  var data = window.TEAM_DATA;
+  var total = data.length;
+  
+  // Aggregates
+  var locMap = {}, monthMap = {}, refMap = {};
+  data.forEach(function(r){
+    var loc = r['Location'] || r['Work Location'] || r['Store'] || 'Unknown';
+    locMap[loc] = (locMap[loc]||0) + 1;
+    
+    var ref = r['Referred By'] || r['Reference'] || 'Direct';
+    refMap[ref] = (refMap[ref]||0) + 1;
+    
+    var dt = r['Joining Date'] || r['Hired Date'] || r['Date'] || '';
+    var mLabel = 'Unknown';
+    if(dt) {
+      var dObj = new Date(dt);
+      if(!isNaN(dObj.getTime())) mLabel = dObj.toLocaleString('default', { month: 'short', year: '2-digit' });
+    }
+    monthMap[mLabel] = (monthMap[mLabel]||0) + 1;
+  });
+
+  // KPIs
+  var teamKpis = [
+    {l:'TOTAL EMPLOYEES', v:total, s:'Active on roster', c:'#60a5fa'},
+    {l:'TOTAL LOCATIONS', v:Object.keys(locMap).length, s:'SJP Branches', c:'#22c55e'},
+    {l:'REFERRAL RATE',   v:((Object.keys(refMap).filter(k=>k!=='Direct').length/total)*100).toFixed(0)+'%', s:'Employee referrals', c:'#a78bfa'},
+    {l:'NEW THIS MONTH',  v:monthMap[new Date().toLocaleString('default',{month:'short',year:'2-digit'})]||0, s:'Onboarded', c:'#f59e0b'}
+  ];
+  var kpiEl = document.getElementById('teamKpiGrid');
+  if(kpiEl) kpiEl.innerHTML = teamKpis.map(function(k){
+    return '<div class="kpi-card"><div class="kpi-lbl">'+k.l+'</div>'
+          +'<div class="kpi-val" style="color:'+k.c+'">'+k.v+'</div>'
+          +'<div class="kpi-sub">'+k.s+'</div></div>';
+  }).join('');
+
+  // Charts
+  killChart('chTeamLoc');
+  var cLoc = document.getElementById('chartTeamLoc');
+  if(cLoc) CI.chTeamLoc = new Chart(cLoc, {
+    type:'pie', data:{
+      labels:Object.keys(locMap), 
+      datasets:[{data:Object.values(locMap), backgroundColor:SHEET_COLORS, borderWidth:0}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:10}}}}}
+  });
+
+  killChart('chTeamMonth');
+  var mKeys = Object.keys(monthMap);
+  var cMonth = document.getElementById('chartTeamMonth');
+  if(cMonth) CI.chTeamMonth = new Chart(cMonth, {
+    type:'bar', data:{
+      labels:mKeys, 
+      datasets:[{label:'Hired', data:mKeys.map(k=>monthMap[k]), backgroundColor:'#38bdf8', borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#64748b'}}}}
+  });
+
+  killChart('chTeamRef');
+  var rKeys = Object.keys(refMap).sort((a,b)=>refMap[b]-refMap[a]).slice(0,8);
+  var cRef = document.getElementById('chartTeamRef');
+  if(cRef) CI.chTeamRef = new Chart(cRef, {
+    type:'bar', data:{
+      labels:rKeys, 
+      datasets:[{label:'Count', data:rKeys.map(k=>refMap[k]), backgroundColor:'#a78bfa', borderRadius:4}]
+    },
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{display:false},ticks:{color:'#64748b'}}}}
+  });
+}
+
+// ═══════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function(){
   loadRegistry();
   if(window.refreshKeyBadge) refreshKeyBadge();
@@ -621,20 +705,8 @@ document.addEventListener('DOMContentLoaded', function(){
   renderSheetDropdown();
   populateAnaSelectors();
 
-  // Migrate old users to new format if needed
-  if(!SHEET_REGISTRY.length){
-    var oldUrl = localStorage.getItem('sjp_sheet_url')||DEFAULT_API_URL;
-    if(oldUrl){
-      var sid = 'outlet_migrated';
-      SHEET_REGISTRY.push({id:sid, label:'SJP', url:oldUrl, color:'#f59e0b', lastSynced:null});
-      saveRegistry();
-      renderSheetList();
-      renderSheetDropdown();
-      populateAnaSelectors();
-      syncOneSheet(sid);
-    }
-  } else if(SHEET_REGISTRY.length) {
-    // Sync the outlet of the active sheet, or the first outlet
+  // Sync the outlet of the active sheet, or the first outlet
+  if(SHEET_REGISTRY.length) {
     var targetOutlet = activeSheetId ? activeSheetId.split('__')[0] : SHEET_REGISTRY[0].id;
     syncOneSheet(targetOutlet);
   }
