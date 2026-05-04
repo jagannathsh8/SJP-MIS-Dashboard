@@ -1064,93 +1064,101 @@ function switchPredTab(id, btn) {
 
 var HIST_MONTHS_MAP = {}; // Map of MonthName -> { MetricName: Value }
 
-async function runPredictiveAnalysis() {
+async function runPredictiveAnalysis(btn) {
   var s = getActiveSheet();
   if(!s || !s.url) { alert("Please connect and select a Google Sheet first in the Data Source tab."); return; }
   
-  var btn = event.currentTarget;
-  var oldText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Syncing MIS...';
+  // Use passed button or fallback to event target
+  btn = btn || (event ? event.currentTarget : null);
+  var oldText = btn ? btn.innerHTML : 'Analyze MIS Data';
+  if(btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Syncing MIS...';
+  }
   
   try {
     var url = s.url + (s.url.indexOf('?')===-1?'?':'&') + 'action=getMIS';
     var resp = await fetch(url);
+    if(!resp.ok) throw new Error("HTTP error " + resp.status);
     var json = await resp.json();
     
     if(json.status === 'success') {
-      var misTab = json.tabs.find(t => t.name === 'MIS');
+      var misTab = (json.tabs || []).find(t => t.name === 'MIS');
       if(misTab && misTab.rawData) {
         processHistoricalData(misTab.rawData);
         document.getElementById('predictiveContent').style.display = 'block';
         showToast("✅ MIS Data Synced Successfully!");
       } else {
-        alert("No tab named 'MIS' found in your sheet. Please ensure you have a tab named exactly 'MIS'.");
+        alert("No tab named 'MIS' found in your sheet. Please ensure your Google Sheet has a tab named exactly 'MIS'.");
       }
     } else {
-      alert("Error from Apps Script: " + (json.message || "Unknown error"));
+      alert("Sheet Error: " + (json.message || "Unknown error from Apps Script"));
     }
   } catch(e) {
-    console.error(e);
-    alert("Connection Error: Make sure your Apps Script is deployed as 'Web App' and set to 'Anyone' access.");
+    console.error("Predictive Error:", e);
+    alert("Connection Error: " + e.message + "\n\n1. Ensure your sheet is connected in 'Data Source'.\n2. Make sure your Apps Script is deployed as a Web App with 'Anyone' access.");
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = oldText;
+    if(btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+    }
   }
 }
 
 function processHistoricalData(rawRows) {
-  if(!rawRows || !rawRows.length) return;
-  window.LAST_HIST_ROWS = rawRows;
-  
-  var monthsToPredict = parseInt(document.getElementById('predMonths').value || '1', 10);
-  
-  document.getElementById('thFore1').style.display = 'table-cell';
-  document.getElementById('thFore2').style.display = monthsToPredict >= 2 ? 'table-cell' : 'none';
-  document.getElementById('thFore3').style.display = monthsToPredict >= 3 ? 'table-cell' : 'none';
+  try {
+    if(!rawRows || !rawRows.length) { alert("MIS data is empty."); return; }
+    window.LAST_HIST_ROWS = rawRows;
+    
+    var monthsToPredict = parseInt(document.getElementById('predMonths').value || '1', 10);
+    
+    document.getElementById('thFore1').style.display = 'table-cell';
+    document.getElementById('thFore2').style.display = monthsToPredict >= 2 ? 'table-cell' : 'none';
+    document.getElementById('thFore3').style.display = monthsToPredict >= 3 ? 'table-cell' : 'none';
 
-  var dynamicItems = []; 
-  var totalRevenueHist = 0;
-  var isPivot = false;
-  var histMonths = []; // Array of month names
-  HIST_MONTHS_MAP = {}; 
-  
-  var topleft = String(rawRows[0][0]||'').trim().toLowerCase();
-  var isOldPivot = topleft === 'month' && String(rawRows[2]&&rawRows[2][0]||'').toLowerCase() === 'category';
-  var isNewPivot = topleft.includes('particulars');
-  
-  if(isOldPivot || isNewPivot) {
-    isPivot = true;
-    var startCol = isNewPivot ? 4 : 2; 
-    var colStep = isNewPivot ? 1 : 2;  
-    var startRow = isNewPivot ? 1 : 3;
+    var dynamicItems = []; 
+    var totalRevenueHist = 0;
+    var isPivot = false;
+    var histMonths = []; 
+    HIST_MONTHS_MAP = {}; 
     
-    // Extract month names from header
-    for(var c=startCol; c<rawRows[0].length; c+=colStep) {
-      var mName = String(rawRows[0][c] || 'Month ' + c).trim();
-      if(mName) {
-        histMonths.push(mName);
-        HIST_MONTHS_MAP[mName] = {};
-      }
-    }
+    var topleft = String(rawRows[0][0]||'').trim().toLowerCase();
+    var isOldPivot = topleft === 'month' && String(rawRows[2]&&rawRows[2][0]||'').toLowerCase() === 'category';
+    var isNewPivot = topleft.includes('particulars');
     
-    var totalDays = isNewPivot ? histMonths.length : histMonths.length * 30;
-    var monthsCount = isNewPivot ? histMonths.length / 30 : histMonths.length;
-    
-    for(var r=startRow; r<rawRows.length; r++) {
-      var cat = isNewPivot ? 'MIS Data' : String(rawRows[r][0] || '').trim();
-      var sub = isNewPivot ? String(rawRows[r][0] || '').trim() : String(rawRows[r][1] || '').trim();
-      if(!cat && !sub) continue;
-      if(isNewPivot && sub.toLowerCase().includes('%age')) continue;
+    if(isOldPivot || isNewPivot) {
+      isPivot = true;
+      var startCol = isNewPivot ? 4 : 2; 
+      var colStep = isNewPivot ? 1 : 2;  
+      var startRow = isNewPivot ? 1 : 3;
       
-      var sum = 0;
-      var mIdx = 0;
-      for(var c=startCol; c<rawRows[r].length; c+=colStep) {
-        var val = parseFloat(rawRows[r][c]) || 0;
-        sum += val;
-        if(histMonths[mIdx]) HIST_MONTHS_MAP[histMonths[mIdx]][sub] = val;
-        mIdx++;
+      for(var c=startCol; c<rawRows[0].length; c+=colStep) {
+        var mName = String(rawRows[0][c] || '').trim();
+        if(mName) {
+          histMonths.push(mName);
+          HIST_MONTHS_MAP[mName] = {};
+        }
       }
+      
+      if(!histMonths.length) { throw new Error("No historical months found in the MIS tab headers."); }
+      
+      var monthsCount = isNewPivot ? histMonths.length / 30 : histMonths.length;
+      
+      for(var r=startRow; r<rawRows.length; r++) {
+        var cat = isNewPivot ? 'MIS Data' : String(rawRows[r][0] || '').trim();
+        var sub = isNewPivot ? String(rawRows[r][0] || '').trim() : String(rawRows[r][1] || '').trim();
+        if(!cat && !sub) continue;
+        if(isNewPivot && sub.toLowerCase().includes('%age')) continue;
+        
+        var sum = 0;
+        var mIdx = 0;
+        for(var c=startCol; c<rawRows[r].length; c+=colStep) {
+          var val = parseFloat(rawRows[r][c]) || 0;
+          sum += val;
+          var currentM = histMonths[mIdx];
+          if(currentM) HIST_MONTHS_MAP[currentM][sub] = val;
+          mIdx++;
+        }
       
       var isRev = sub.toLowerCase().includes('net revenue') || sub.toLowerCase().includes('total revenue') || (cat.toLowerCase().includes('revenue') && sum > 0 && totalRevenueHist === 0);
       if(isRev && totalRevenueHist === 0) totalRevenueHist = sum;
