@@ -61,7 +61,14 @@ function parseAppsScriptTabs(json){
   if(json.status!=='success' || !json.tabs) throw new Error('Invalid multi-tab response');
   var parsedTabs = {};
   
+  window.MIS_DATA = null;
+  
   json.tabs.forEach(function(tab){
+    if(tab.name.toUpperCase() === 'MIS' && tab.rawData) {
+      window.MIS_DATA = tab.rawData;
+      return;
+    }
+    
     var data = tab.data;
     if(!data || !data.length) return;
     
@@ -1047,43 +1054,8 @@ function buildAnBenchmark() {
 }
 
 // ═══════════════════════════════════════════════
-// PREDICTIVE MIS (Excel Upload)
+// PREDICTIVE MIS (Google Sheets Sync)
 // ═══════════════════════════════════════════════
-
-function handleMisUpload(input) {
-  var file = input.files[0];
-  if(!file) return;
-  
-  var btn = document.getElementById('btnUploadMis');
-  if(btn) {
-    btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;margin-right:8px;width:12px;height:12px"></span> Analyzing Data...';
-    btn.disabled = true;
-  }
-  
-  setTimeout(function() {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        var data = new Uint8Array(e.target.result);
-        var workbook = XLSX.read(data, {type: 'array'});
-        var firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        var rawRows = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
-        
-        processHistoricalData(rawRows);
-        
-        if(btn) {
-          btn.innerHTML = 'Data Loaded Successfully ✅';
-          setTimeout(() => { btn.innerHTML = 'Upload Another File'; btn.disabled = false; }, 3000);
-        }
-      } catch(err) {
-        alert("Error parsing Excel file. " + err.message);
-        console.error(err);
-        if(btn) { btn.innerHTML = 'Choose File'; btn.disabled = false; }
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }, 100);
-}
 
 function processHistoricalData(rawRows) {
   if(!rawRows || !rawRows.length) return;
