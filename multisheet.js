@@ -1060,7 +1060,6 @@ function handleMisUpload(input) {
     btn.disabled = true;
   }
   
-  // Use setTimeout to allow UI to update before heavy synchronous parsing
   setTimeout(function() {
     var reader = new FileReader();
     reader.onload = function(e) {
@@ -1068,27 +1067,16 @@ function handleMisUpload(input) {
         var data = new Uint8Array(e.target.result);
         var workbook = XLSX.read(data, {type: 'array'});
         var firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        
-        // Smart Header Detection: Scan first 20 rows for typical headers
         var rawRows = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
-        var headerRowIdx = 0;
-        for(var i=0; i<Math.min(20, rawRows.length); i++) {
-          var rowStr = rawRows[i].join(' ').toLowerCase();
-          if(rowStr.includes('date') || rowStr.includes('revenue') || rowStr.includes('sales') || rowStr.includes('particular')) {
-            headerRowIdx = i;
-            break;
-          }
-        }
         
-        var rows = XLSX.utils.sheet_to_json(firstSheet, {range: headerRowIdx, defval: ''});
-        processHistoricalData(rows);
+        processHistoricalData(rawRows);
         
         if(btn) {
           btn.innerHTML = 'Data Loaded Successfully ✅';
           setTimeout(() => { btn.innerHTML = 'Upload Another File'; btn.disabled = false; }, 3000);
         }
       } catch(err) {
-        alert("Error reading Excel file. Ensure it's a valid .xlsx file.");
+        alert("Error parsing Excel file. " + err.message);
         console.error(err);
         if(btn) { btn.innerHTML = 'Choose File'; btn.disabled = false; }
       }
@@ -1097,121 +1085,139 @@ function handleMisUpload(input) {
   }, 100);
 }
 
-function processHistoricalData(rows) {
-  if(!rows || !rows.length) return;
-  window.LAST_HIST_ROWS = rows;
+function processHistoricalData(rawRows) {
+  if(!rawRows || !rawRows.length) return;
+  window.LAST_HIST_ROWS = rawRows;
   
   var monthsToPredict = parseInt(document.getElementById('predMonths').value || '1', 10);
   
-  // Show/Hide columns based on selection
   document.getElementById('thFore1').style.display = 'table-cell';
   document.getElementById('thFore2').style.display = monthsToPredict >= 2 ? 'table-cell' : 'none';
   document.getElementById('thFore3').style.display = monthsToPredict >= 3 ? 'table-cell' : 'none';
 
-  // 1. Fuzzy match headers for all required parameters
-  var keys = Object.keys(rows[0]);
-  var getK = (keywords) => keys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+  var totalDays = 0;
+  var dynamicItems = []; // Array of { cat: '', sub: '', totalHist: 0, histMonthlyAvg: 0 }
+  var totalRevenueHist = 0;
+  var monthsCount = 0;
   
-  var dKey = getK(['date', 'day', 'timestamp']);
-  var pMap = {
-    'Sales': getK(['revenue', 'sales', 'net rev', 'total rev']),
-    'RM Indent': getK(['rm indent', 'raw material']),
-    'CP Indent': getK(['cp indent', 'consumable']),
-    'Packaging': getK(['packaging', 'packing']),
-    'HK Material': getK(['hk', 'housekeeping']),
-    'Gas (GAIL)': getK(['gas', 'gail']),
-    'Water': getK(['water', 'tanker']),
-    'Petty Cash': getK(['petty', 'cash'])
-  };
+  // 1. Detect format
+  var isPivot = String(rawRows[0][0]||'').toLowerCase() === 'month' && String(rawRows[2]&&rawRows[2][0]||'').toLowerCase() === 'category';
   
-  if(!dKey || !pMap['Sales']) {
-    alert("Could not automatically identify Date and Revenue columns in the uploaded file.");
+  if(isPivot) {
+    // ---- PIVOT FORMAT PROCESSING ----
+    for(var c=2; c<rawRows[0].length; c+=2) {
+      if(rawRows[0][c]) monthsCount++;
+    }
+    totalDays = monthsCount * 30; // approx
+    
+    for(var r=3; r<rawRows.length; r++) {
+      var cat = String(rawRows[r][0] || '').trim();
+      var sub = String(rawRows[r][1] || '').trim();
+      if(!cat && !sub) continue; // Skip totally empty rows
+      
+      var sum = 0;
+      for(var c=2; c<rawRows[r].length; c+=2) {
+        sum += parseFloat(rawRows[r][c]) || 0;
+      }
+      
+      var isRev = sub.toLowerCase().includes('net revenue') || sub.toLowerCase().includes('total revenue') || (cat.toLowerCase().includes('revenue') && sum > 0 && totalRevenueHist === 0);
+      if(isRev && totalRevenueHist === 0) totalRevenueHist = sum;
+      
+      if(sum !== 0 || isRev) {
+         dynamicItems.push({ cat: cat, sub: sub, totalHist: sum, histMonthlyAvg: monthsCount > 0 ? sum / monthsCount : 0, isRev: isRev });
+      }
+    }
+  } else {
+    // ---- STANDARD FORMAT PROCESSING ----
+    var headerRowIdx = 0;
+    for(var i=0; i<Math.min(20, rawRows.length); i++) {
+      var rowStr = rawRows[i].join(' ').toLowerCase();
+      if(rowStr.includes('date') || rowStr.includes('revenue') || rowStr.includes('sales')) {
+        headerRowIdx = i; break;
+      }
+    }
+    
+    var headers = rawRows[headerRowIdx];
+    monthsCount = rawRows.length - headerRowIdx - 1; // Assuming each row is a day, roughly
+    totalDays = monthsCount; // For daily data
+    
+    var sums = {};
+    for(var c=0; c<headers.length; c++) {
+      var head = String(headers[c] || '').trim();
+      if(!head || head.toLowerCase() === 'date' || head.toLowerCase() === 'day' || head.toLowerCase() === 'particulars') continue;
+      sums[head] = 0;
+    }
+    
+    for(var r=headerRowIdx+1; r<rawRows.length; r++) {
+      for(var c=0; c<headers.length; c++) {
+        var head = String(headers[c] || '').trim();
+        if(sums[head] !== undefined) {
+           sums[head] += parseFloat(rawRows[r][c]) || 0;
+        }
+      }
+    }
+    
+    // Map it to dynamic items
+    Object.keys(sums).forEach(k => {
+      var isRev = k.toLowerCase().includes('revenue') || k.toLowerCase().includes('sales');
+      if(isRev && totalRevenueHist === 0) totalRevenueHist = sums[k];
+      dynamicItems.push({ cat: 'Standard Data', sub: k, totalHist: sums[k], histMonthlyAvg: sums[k], isRev: isRev });
+    });
+  }
+  
+  if(totalRevenueHist === 0) {
+    alert("No valid revenue data found in the file to base calculations on.");
     return;
   }
   
-  // 2. Aggregate Historical Data
-  var histSums = {};
-  Object.keys(pMap).forEach(k => histSums[k] = 0);
-  var validDays = 0;
+  var histDailyAvgRev = totalDays > 0 ? totalRevenueHist / totalDays : 0;
   
-  rows.forEach(row => {
-    var rev = parseFloat(row[pMap['Sales']]) || 0;
-    if(rev > 0) {
-      validDays++;
-      Object.keys(pMap).forEach(k => {
-        if(pMap[k]) histSums[k] += (parseFloat(row[pMap[k]]) || 0);
-      });
-    }
-  });
-  
-  var histDailyAvgRev = validDays > 0 ? histSums['Sales'] / validDays : 0;
-  
-  // Calculate Historical Ratios (as % of Sales)
-  var histRatios = {};
-  Object.keys(pMap).forEach(k => {
-    histRatios[k] = histSums['Sales'] > 0 ? histSums[k] / histSums['Sales'] : 0;
-  });
-
-  // 3. Get Current Live Data (Run Rate)
+  // 2. Get Current Live Data (Run Rate)
   var liveAvgRev = 0;
-  var liveSums = {};
-  Object.keys(pMap).forEach(k => liveSums[k] = 0);
-  
   var s = getActiveSheet();
   if(s && s.data) {
     var cDays = s.data.filter(d=>d.sales>0).length || 1;
     var cRev = s.data.map(d=>d.sales||0).reduce((a,b)=>a+b,0);
     liveAvgRev = cRev / cDays;
-    
-    // Attempt to map live data to parameters
-    liveSums['Sales'] = cRev;
-    liveSums['RM Indent'] = s.data.map(d=>d.rm||0).reduce((a,b)=>a+b,0);
-    liveSums['CP Indent'] = s.data.map(d=>d.cp||0).reduce((a,b)=>a+b,0);
-    liveSums['Packaging'] = s.data.map(d=>d.pkg||0).reduce((a,b)=>a+b,0);
-    liveSums['HK Material'] = s.data.map(d=>d.hk||0).reduce((a,b)=>a+b,0);
-    liveSums['Gas (GAIL)'] = s.data.map(d=>d.gasv||0).reduce((a,b)=>a+b,0);
-    liveSums['Water'] = s.data.map(d=>d.watv||0).reduce((a,b)=>a+b,0);
-    liveSums['Petty Cash'] = s.data.map(d=>d.petty||0).reduce((a,b)=>a+b,0);
   }
   
-  var liveTotalEst = {};
-  Object.keys(pMap).forEach(k => {
-    liveTotalEst[k] = (liveSums[k] / (s.data.filter(d=>d.sales>0).length||1)) * 30; // Project to 30 days
-  });
+  var liveMthEstSales = liveAvgRev * 30;
 
-  // 4. Calculate Growth & Multiplier
+  // 3. Calculate Growth & Multiplier
   var growthMult = histDailyAvgRev > 0 ? (liveAvgRev / histDailyAvgRev) : 1;
-  // Bound the multiplier to avoid wild predictions (e.g., max 15% growth per month)
-  var safeMult = Math.min(Math.max(growthMult, 0.8), 1.15); 
+  var safeMult = Math.min(Math.max(growthMult, 0.8), 1.15); // Bound 80% to 115%
   
   document.getElementById('predHistAvg').innerText = '₹' + fmtN(histDailyAvgRev);
-  document.getElementById('predCurrRun').innerText = '₹' + fmtL(liveAvgRev * 30);
+  document.getElementById('predCurrRun').innerText = '₹' + fmtL(liveMthEstSales);
   document.getElementById('predGrowth').innerText = (growthMult * 100).toFixed(1) + '%';
   document.getElementById('predGrowth').style.color = growthMult >= 1 ? 'var(--grn)' : 'var(--red)';
 
-  // 5. Generate Budget Table
+  // 4. Generate Dynamic Budget Table
   var tblHtml = '';
-  Object.keys(pMap).forEach(k => {
-    var ratioPct = (histRatios[k] * 100).toFixed(2);
-    if(k === 'Sales') ratioPct = '100.00';
+  
+  // Base predictions on Live Estimate * Safe Multiplier, but fallback to Historical if live is missing
+  var baseVal = liveMthEstSales > 0 ? liveMthEstSales : (histDailyAvgRev * 30);
+  var m1Sales = baseVal * safeMult;
+  var m2Sales = m1Sales * safeMult;
+  var m3Sales = m2Sales * safeMult;
+  
+  dynamicItems.forEach(item => {
+    var ratio = item.totalHist / totalRevenueHist;
+    var ratioPct = (ratio * 100).toFixed(2);
     
-    // Baseline for predictions is Current Mth Est * Growth Multiplier
-    var baseVal = liveTotalEst['Sales'] > 0 ? liveTotalEst['Sales'] : (histDailyAvgRev * 30);
+    // Exact predicted figures
+    var m1Val = item.isRev ? m1Sales : m1Sales * ratio;
+    var m2Val = item.isRev ? m2Sales : m2Sales * ratio;
+    var m3Val = item.isRev ? m3Sales : m3Sales * ratio;
     
-    var m1Sales = baseVal * safeMult;
-    var m2Sales = m1Sales * safeMult;
-    var m3Sales = m2Sales * safeMult;
+    var color = item.isRev ? 'var(--amb)' : 'var(--txt)';
+    var weight = item.isRev ? '800' : '500';
+    var bg = item.isRev ? 'background:rgba(245,158,11,0.05)' : '';
     
-    var m1Val = m1Sales * histRatios[k];
-    var m2Val = m2Sales * histRatios[k];
-    var m3Val = m3Sales * histRatios[k];
-    
-    var color = k==='Sales' ? 'var(--amb)' : 'var(--txt)';
-    var weight = k==='Sales' ? '700' : '400';
-    
-    tblHtml += `<tr>
-      <td style="color:${color};font-weight:${weight}">${k}</td>
-      <td class="num" style="font-family:'DM Mono',monospace;color:var(--m2)">₹${fmtL(liveTotalEst[k])}</td>
+    tblHtml += `<tr style="${bg}">
+      <td style="color:var(--m1);font-size:11px">${item.cat}</td>
+      <td style="color:${color};font-weight:${weight}">${item.sub}</td>
+      <td class="num" style="font-family:'DM Mono',monospace;color:var(--m2)">₹${fmtL(item.histMonthlyAvg)}</td>
       <td class="num" style="font-family:'DM Mono',monospace;color:${color};font-weight:700">₹${fmtL(m1Val)}</td>
       <td class="num" style="font-family:'DM Mono',monospace;display:${monthsToPredict>=2?'table-cell':'none'}">₹${fmtL(m2Val)}</td>
       <td class="num" style="font-family:'DM Mono',monospace;display:${monthsToPredict>=3?'table-cell':'none'}">₹${fmtL(m3Val)}</td>
@@ -1221,16 +1227,11 @@ function processHistoricalData(rows) {
   
   document.getElementById('predBudgetTbl').innerHTML = tblHtml;
   
-  // 6. Insights Text
-  var iHtml = `<strong>Executive Summary:</strong> Based on historical data, your standard operating cost for RM is <strong>${(histRatios['RM Indent']*100).toFixed(1)}%</strong> and CP is <strong>${(histRatios['CP Indent']*100).toFixed(1)}%</strong>. `;
-  iHtml += `Applying your current growth trajectory of <strong>${((safeMult-1)*100).toFixed(1)}%</strong>, we project next month's sales to reach <strong>₹${fmtL(baseVal*safeMult)}</strong>. `;
-  iHtml += `To maintain profitability, strictly allocate budgets according to the "Next Month" column above. Do not exceed <strong>₹${fmtL((baseVal*safeMult)*histRatios['RM Indent'])}</strong> on Raw Materials.`;
+  // 5. Insights Text
+  var iHtml = `<strong>Executive Summary:</strong> Extracted exactly <strong>${dynamicItems.length}</strong> categories and subcategories from your historical data. `;
+  iHtml += `Applying your current growth trajectory of <strong>${((safeMult-1)*100).toFixed(1)}%</strong>, we project next month's total revenue to reach <strong>₹${fmtL(m1Sales)}</strong>. `;
+  iHtml += `The automated budget table above has enforced your historic ratio percentages across every single subcategory to ensure strict profitability constraints are met.`;
   
   document.getElementById('predInsights').innerHTML = iHtml;
-  
   document.getElementById('predictiveContent').style.display = 'block';
-  
-  // Cleanup old charts if they existed
-  killChart('chPredYoy');
-  killChart('chPredCost');
 }
