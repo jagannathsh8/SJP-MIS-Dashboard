@@ -1159,82 +1159,88 @@ function processHistoricalData(rawRows) {
           if(currentM) HIST_MONTHS_MAP[currentM][sub] = val;
           mIdx++;
         }
-      
-      var isRev = sub.toLowerCase().includes('net revenue') || sub.toLowerCase().includes('total revenue') || (cat.toLowerCase().includes('revenue') && sum > 0 && totalRevenueHist === 0);
-      if(isRev && totalRevenueHist === 0) totalRevenueHist = sum;
-      
-      if(sum !== 0 || isRev) {
-         dynamicItems.push({ cat: cat, sub: sub, totalHist: sum, histMonthlyAvg: monthsCount > 0 ? sum / monthsCount : 0, isRev: isRev });
+        
+        var isRev = sub.toLowerCase().includes('net revenue') || sub.toLowerCase().includes('total revenue') || (cat.toLowerCase().includes('revenue') && sum > 0 && totalRevenueHist === 0);
+        if(isRev && totalRevenueHist === 0) totalRevenueHist = sum;
+        
+        if(sum !== 0 || isRev) {
+           dynamicItems.push({ cat: cat, sub: sub, totalHist: sum, histMonthlyAvg: monthsCount > 0 ? sum / monthsCount : 0, isRev: isRev });
+        }
       }
     }
-  }
 
-  if(totalRevenueHist === 0) {
-    alert("No valid revenue data found in the MIS tab. Please check your data.");
-    document.getElementById('predictiveContent').style.display='none';
-    return;
-  }
+    if(totalRevenueHist === 0) {
+      alert("No valid revenue data found in the MIS tab. Please check your data.");
+      document.getElementById('predictiveContent').style.display='none';
+      return;
+    }
 
-  // 1. Fill Trends Table
-  var trendHead = '<th>Metric</th>';
-  histMonths.forEach(m => trendHead += `<th class="num">${m}</th>`);
-  document.getElementById('predTrendHead').innerHTML = trendHead;
-  
-  var trendHtml = '';
-  dynamicItems.forEach(item => {
-    trendHtml += `<tr><td>${item.sub}</td>`;
-    histMonths.forEach(m => {
-      var v = HIST_MONTHS_MAP[m][item.sub] || 0;
-      trendHtml += `<td class="num" style="font-family:'DM Mono',monospace">₹${fmtN(v)}</td>`;
+    // 1. Fill Trends Table
+    var trendHead = '<th>Metric</th>';
+    histMonths.forEach(m => trendHead += `<th class="num">${m}</th>`);
+    document.getElementById('predTrendHead').innerHTML = trendHead;
+    
+    var trendHtml = '';
+    dynamicItems.forEach(item => {
+      trendHtml += `<tr><td>${item.sub}</td>`;
+      histMonths.forEach(m => {
+        var v = HIST_MONTHS_MAP[m][item.sub] || 0;
+        trendHtml += `<td class="num" style="font-family:'DM Mono',monospace">₹${fmtN(v)}</td>`;
+      });
+      trendHtml += '</tr>';
     });
-    trendHtml += '</tr>';
-  });
-  document.getElementById('predTrendTbl').innerHTML = trendHtml;
+    document.getElementById('predTrendTbl').innerHTML = trendHtml;
 
-  // 2. Fill Compare Dropdowns
-  var optHtml = histMonths.map(m => `<option value="${m}">${m}</option>`).join('');
-  document.getElementById('compMonthA').innerHTML = optHtml;
-  document.getElementById('compMonthB').innerHTML = optHtml;
-  if(histMonths.length > 1) document.getElementById('compMonthB').value = histMonths[histMonths.length-1];
-  runPredCompare();
+    // 2. Fill Compare Dropdowns
+    var optHtml = histMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+    document.getElementById('compMonthA').innerHTML = optHtml;
+    document.getElementById('compMonthB').innerHTML = optHtml;
+    if(histMonths.length > 1) document.getElementById('compMonthB').value = histMonths[histMonths.length-1];
+    runPredCompare();
 
-  // 3. Fill Budget Planner (The Predictions)
-  var liveAvgRev = 0;
-  var s = getActiveSheet();
-  if(s && s.data) {
-    var cDays = s.data.filter(d=>d.sales>0).length || 1;
-    var cRev = s.data.map(d=>d.sales||0).reduce((a,b)=>a+b,0);
-    liveAvgRev = cRev / cDays;
+    // 3. Fill Budget Planner (The Predictions)
+    var liveAvgRev = 0;
+    var s = getActiveSheet();
+    if(s && s.data) {
+      var cDays = s.data.filter(d=>d.sales>0).length || 1;
+      var cRev = s.data.map(d=>d.sales||0).reduce((a,b)=>a+b,0);
+      liveAvgRev = cRev / cDays;
+    }
+    var liveMthEstSales = liveAvgRev * 30;
+    var histDailyAvgRev = totalRevenueHist / (isNewPivot ? histMonths.length : histMonths.length * 30);
+    var growthMult = histDailyAvgRev > 0 ? (liveAvgRev / histDailyAvgRev) : 1;
+    var safeMult = Math.min(Math.max(growthMult, 0.8), 1.15); 
+    
+    document.getElementById('predHistAvg').innerText = '₹' + fmtN(histDailyAvgRev);
+    document.getElementById('predCurrRun').innerText = '₹' + fmtL(liveMthEstSales);
+    document.getElementById('predGrowth').innerText = (growthMult * 100).toFixed(1) + '%';
+
+    var plannerHtml = '';
+    var m1Sales = liveMthEstSales > 0 ? liveMthEstSales * safeMult : (histDailyAvgRev * 30 * safeMult);
+    dynamicItems.forEach(item => {
+      var ratio = item.totalHist / totalRevenueHist;
+      var m1Val = item.isRev ? m1Sales : m1Sales * ratio;
+      plannerHtml += `<tr>
+        <td style="font-size:10px;color:var(--m1)">${item.cat}</td>
+        <td style="font-weight:700">${item.sub}</td>
+        <td class="num">₹${fmtL(item.histMonthlyAvg)}</td>
+        <td class="num" style="color:var(--pur);font-weight:800">₹${fmtL(m1Val)}</td>
+        <td class="num" style="display:${monthsToPredict>=2?'table-cell':'none'}">₹${fmtL(m1Val * safeMult)}</td>
+        <td class="num" style="display:${monthsToPredict>=3?'table-cell':'none'}">₹${fmtL(m1Val * safeMult * safeMult)}</td>
+        <td class="num" style="color:var(--m2)">${(ratio*100).toFixed(1)}%</td>
+      </tr>`;
+    });
+    document.getElementById('predBudgetTbl').innerHTML = plannerHtml;
+
+    var iHtml = `<strong>Executive Summary:</strong> Analyzing <strong>${histMonths.length}</strong> months of history. `;
+    iHtml += `Projecting <strong>₹${fmtL(m1Sales)}</strong> for next month based on <strong>${((safeMult-1)*100).toFixed(1)}%</strong> growth relative to history.`;
+    document.getElementById('predInsights').innerHTML = iHtml;
+    document.getElementById('predictiveContent').style.display='block';
+
+  } catch(e) {
+    console.error("Data Processing Error:", e);
+    alert("Data Processing Error: " + e.message);
   }
-  var liveMthEstSales = liveAvgRev * 30;
-  var histDailyAvgRev = totalRevenueHist / (isNewPivot ? histMonths.length : histMonths.length * 30);
-  var growthMult = histDailyAvgRev > 0 ? (liveAvgRev / histDailyAvgRev) : 1;
-  var safeMult = Math.min(Math.max(growthMult, 0.8), 1.15); 
-  
-  document.getElementById('predHistAvg').innerText = '₹' + fmtN(histDailyAvgRev);
-  document.getElementById('predCurrRun').innerText = '₹' + fmtL(liveMthEstSales);
-  document.getElementById('predGrowth').innerText = (growthMult * 100).toFixed(1) + '%';
-
-  var plannerHtml = '';
-  var m1Sales = liveMthEstSales > 0 ? liveMthEstSales * safeMult : (histDailyAvgRev * 30 * safeMult);
-  dynamicItems.forEach(item => {
-    var ratio = item.totalHist / totalRevenueHist;
-    var m1Val = item.isRev ? m1Sales : m1Sales * ratio;
-    plannerHtml += `<tr>
-      <td style="font-size:10px;color:var(--m1)">${item.cat}</td>
-      <td style="font-weight:700">${item.sub}</td>
-      <td class="num">₹${fmtL(item.histMonthlyAvg)}</td>
-      <td class="num" style="color:var(--pur);font-weight:800">₹${fmtL(m1Val)}</td>
-      <td class="num" style="display:${monthsToPredict>=2?'table-cell':'none'}">₹${fmtL(m1Val * safeMult)}</td>
-      <td class="num" style="display:${monthsToPredict>=3?'table-cell':'none'}">₹${fmtL(m1Val * safeMult * safeMult)}</td>
-      <td class="num" style="color:var(--m2)">${(ratio*100).toFixed(1)}%</td>
-    </tr>`;
-  });
-  document.getElementById('predBudgetTbl').innerHTML = plannerHtml;
-
-  var iHtml = `<strong>Executive Summary:</strong> Analyzing <strong>${histMonths.length}</strong> months of history. `;
-  iHtml += `Projecting <strong>₹${fmtL(m1Sales)}</strong> for next month based on <strong>${((safeMult-1)*100).toFixed(1)}%</strong> growth relative to history.`;
-  document.getElementById('predInsights').innerHTML = iHtml;
 }
 
 function runPredCompare() {
