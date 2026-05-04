@@ -1220,69 +1220,11 @@ function runPredCompare() {
   });
   document.getElementById('predCompareTbl').innerHTML = html;
 }
-  
-  var histDailyAvgRev = totalDays > 0 ? totalRevenueHist / totalDays : 0;
-  
-  // 2. Get Current Live Data (Run Rate)
-  var liveAvgRev = 0;
-  var s = getActiveSheet();
-  if(s && s.data) {
-    var cDays = s.data.filter(d=>d.sales>0).length || 1;
-    var cRev = s.data.map(d=>d.sales||0).reduce((a,b)=>a+b,0);
-    liveAvgRev = cRev / cDays;
-  }
-  
-  var liveMthEstSales = liveAvgRev * 30;
 
-  // 3. Calculate Growth & Multiplier
-  var growthMult = histDailyAvgRev > 0 ? (liveAvgRev / histDailyAvgRev) : 1;
-  var safeMult = Math.min(Math.max(growthMult, 0.8), 1.15); // Bound 80% to 115%
-  
-  document.getElementById('predHistAvg').innerText = '₹' + fmtN(histDailyAvgRev);
-  document.getElementById('predCurrRun').innerText = '₹' + fmtL(liveMthEstSales);
-  document.getElementById('predGrowth').innerText = (growthMult * 100).toFixed(1) + '%';
-  document.getElementById('predGrowth').style.color = growthMult >= 1 ? 'var(--grn)' : 'var(--red)';
-
-  // 4. Generate Dynamic Budget Table
-  var tblHtml = '';
-  
-  // Base predictions on Live Estimate * Safe Multiplier, but fallback to Historical if live is missing
-  var baseVal = liveMthEstSales > 0 ? liveMthEstSales : (histDailyAvgRev * 30);
-  var m1Sales = baseVal * safeMult;
-  var m2Sales = m1Sales * safeMult;
-  var m3Sales = m2Sales * safeMult;
-  
-  dynamicItems.forEach(item => {
-    var ratio = item.totalHist / totalRevenueHist;
-    var ratioPct = (ratio * 100).toFixed(2);
-    
-    // Exact predicted figures
-    var m1Val = item.isRev ? m1Sales : m1Sales * ratio;
-    var m2Val = item.isRev ? m2Sales : m2Sales * ratio;
-    var m3Val = item.isRev ? m3Sales : m3Sales * ratio;
-    
-    var color = item.isRev ? 'var(--amb)' : 'var(--txt)';
-    var weight = item.isRev ? '800' : '500';
-    var bg = item.isRev ? 'background:rgba(245,158,11,0.05)' : '';
-    
-    tblHtml += `<tr style="${bg}">
-      <td style="color:var(--m1);font-size:11px">${item.cat}</td>
-      <td style="color:${color};font-weight:${weight}">${item.sub}</td>
-      <td class="num" style="font-family:'DM Mono',monospace;color:var(--m2)">₹${fmtL(item.histMonthlyAvg)}</td>
-      <td class="num" style="font-family:'DM Mono',monospace;color:${color};font-weight:700">₹${fmtL(m1Val)}</td>
-      <td class="num" style="font-family:'DM Mono',monospace;display:${monthsToPredict>=2?'table-cell':'none'}">₹${fmtL(m2Val)}</td>
-      <td class="num" style="font-family:'DM Mono',monospace;display:${monthsToPredict>=3?'table-cell':'none'}">₹${fmtL(m3Val)}</td>
-      <td class="num" style="color:var(--m1)">${ratioPct}%</td>
-    </tr>`;
-  });
-  
-  document.getElementById('predBudgetTbl').innerHTML = tblHtml;
-  
-  // 5. Insights Text
-  var iHtml = `<strong>Executive Summary:</strong> Extracted exactly <strong>${dynamicItems.length}</strong> categories and subcategories from your historical data. `;
-  iHtml += `Applying your current growth trajectory of <strong>${((safeMult-1)*100).toFixed(1)}%</strong>, we project next month's total revenue to reach <strong>₹${fmtL(m1Sales)}</strong>. `;
-  iHtml += `The automated budget table above has enforced your historic ratio percentages across every single subcategory to ensure strict profitability constraints are met.`;
-  
-  document.getElementById('predInsights').innerHTML = iHtml;
-  document.getElementById('predictiveContent').style.display = 'block';
+// ── MODALS ──
+function openModal(id){
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('show');
 }
