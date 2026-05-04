@@ -17,6 +17,11 @@ function doGet(e) {
     var data = sheet.getDataRange().getValues();
     if (data.length < 2) continue;
 
+    if (name.trim().toUpperCase() === 'MIS') {
+      tabs.push({ name: name, rawData: data });
+      continue;
+    }
+
     var headers = data[0];
     var rows = [];
     for (var i = 1; i < data.length; i++) {

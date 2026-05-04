@@ -569,8 +569,8 @@ document.addEventListener('DOMContentLoaded', function(){
   renderSheetList();
   renderSheetDropdown();
   populateAnaSelectors();
-  if(SHEET_REGISTRY.length) {
+  if(SHEET_REGISTRY.length > 0) {
     var targetOutlet = activeSheetId ? activeSheetId.split('__')[0] : SHEET_REGISTRY[0].id;
-    syncOneSheet(targetOutlet);
+    if(targetOutlet) syncOneSheet(targetOutlet);
   }
 });
