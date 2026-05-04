@@ -1,8 +1,7 @@
-const CACHE_NAME = 'sjp-mis-v7';
+const CACHE_NAME = 'sjp-mis-v8';
 const ASSETS = [
   './',
   './index.html',
-  './multisheet.js',
   './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0',
@@ -11,33 +10,22 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
-      );
+      return Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
     })
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network-First strategy for local assets
-  if (event.request.mode === 'navigate' || event.request.url.includes('index.html') || event.request.url.includes('multisheet.js')) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
-    );
+  // Network-First for index.html to ensure users get the new consolidated version
+  if (event.request.mode === 'navigate' || event.request.url.includes('index.html')) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
   } else {
-    // Cache-First for others (images, external libs)
-    event.respondWith(
-      caches.match(event.request).then((response) => {
-        return response || fetch(event.request);
-      })
-    );
+    event.respondWith(caches.match(event.request).then((response) => response || fetch(event.request)));
   }
 });

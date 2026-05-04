@@ -344,6 +344,25 @@ tbody tr:last-child td{border-bottom:none}
 
 <div class="main">
 
+<!-- ══════════ SETUP / ONBOARDING ══════════ -->
+<div class="page" id="page-setup">
+  <div style="text-align:center;padding:40px 20px">
+    <div style="font-size:48px;margin-bottom:20px">📊</div>
+    <div style="font-size:20px;font-weight:800;margin-bottom:10px">Welcome to SJP MIS Dashboard</div>
+    <div style="font-size:13px;color:var(--m1);margin-bottom:30px;line-height:1.6">Connect your Google Sheet to begin analyzing your store performance. Each month should be added as a separate entry.</div>
+    
+    <div class="card card-body" style="max-width:400px;margin:0 auto;text-align:left">
+      <div style="font-weight:700;font-size:14px;margin-bottom:15px">＋ Connect Your First Month</div>
+      <label style="font-size:11px;color:var(--m1);display:block;margin-bottom:5px">Month Label (e.g. April 2026)</label>
+      <input class="inp" id="setupSheetLabel" placeholder="SJP - April 2026" style="margin-bottom:15px">
+      <label style="font-size:11px;color:var(--m1);display:block;margin-bottom:5px">Apps Script /exec URL</label>
+      <input class="inp" id="setupSheetUrl" placeholder="https://script.google.com/macros/s/.../exec" style="margin-bottom:20px">
+      <button class="btn btn-primary" onclick="saveSetupSheet()">Connect & Launch Dashboard</button>
+      <div id="setupErr" style="font-size:11px;color:var(--red);margin-top:10px;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ OVERVIEW ══════════ -->
 <div class="page active" id="page-overview">
   <div class="kpi-grid" id="kpiGrid" style="margin-bottom:12px"></div>
@@ -1978,7 +1997,6 @@ function expandChart(chartId, title){
   if(fsChart) fsChart.destroy();
   var ctx = document.getElementById('fsCanvas').getContext('2d');
   
-  // Robust config copy (avoid JSON.stringify on complex Chart configs)
   var cfg = {
     type: orig.config.type,
     data: orig.data,
@@ -1996,7 +2014,6 @@ function expandChart(chartId, title){
     }
   };
   
-  // Add special formatting for Y axis if it looks like revenue
   if(cfg.type === 'line' || cfg.type === 'bar') {
     cfg.options.scales.y.ticks.callback = function(v){ 
       return v >= 1000 ? (v/100000).toFixed(1)+'L' : v; 
@@ -2012,32 +2029,6 @@ function closeFS(){
     if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
   } catch(e){}
 }
-
-// 13. BOOT
-document.addEventListener('DOMContentLoaded', function(){
-  // Navigation
-  document.querySelectorAll('.nav-btn').forEach(function(btn){
-    btn.onclick = function(){
-      var page = this.getAttribute('data-page');
-      if(!page) return;
-      
-      // Update UI
-      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
-      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-      this.classList.add('active');
-      document.getElementById('page-'+page).classList.add('active');
-      
-      // Build charts for page
-      setTimeout(function(){ buildPageCharts(page); }, 50);
-      
-      // Scroll to top
-      window.scrollTo({top:0, behavior:'smooth'});
-    };
-  });
-
-  // Initial load
-  refreshKeyBadge();
-});
 
 function toggleTeamRange(val){
   document.getElementById('teamRangeWrap').style.display = (val==='custom'?'flex':'none');
@@ -2082,17 +2073,241 @@ function switchAnTab(tab){
   if(tab === 'benchmark') buildAnBenchmark();
 }
 
+// ═══════════════════════════════════════════════
+// 13. MULTI-SHEET & BOOT LOGIC
+// ═══════════════════════════════════════════════
+var SHEET_REGISTRY = [];
+var SHEET_DATA = {};
+var activeSheetId = null;
+
+function loadRegistry() {
+  var r = localStorage.getItem('SHEET_REGISTRY');
+  SHEET_REGISTRY = r ? JSON.parse(r) : [];
+  activeSheetId = localStorage.getItem('ACTIVE_SHEET_ID');
+}
+
+function saveRegistry() {
+  localStorage.setItem('SHEET_REGISTRY', JSON.stringify(SHEET_REGISTRY));
+  localStorage.setItem('ACTIVE_SHEET_ID', activeSheetId);
+}
+
+function renderSheetList() {
+  var el = document.getElementById('sheetListEl');
+  if(!el) return;
+  if(!SHEET_REGISTRY.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--m1);font-size:12px">No outlets added yet. Click "+ Add Sheet" to connect your first month.</div>';
+    return;
+  }
+  el.innerHTML = SHEET_REGISTRY.map(function(s) {
+    var isActive = activeSheetId && activeSheetId.startsWith(s.id);
+    return `<div class="sheet-card" style="border-color:${isActive?'var(--amb)':'var(--b2)'}">
+      <div class="sheet-dot" style="background:${isActive?'var(--amb)':'#334155'}"></div>
+      <div class="sheet-info">
+        <div class="sheet-label">${s.label}</div>
+        <div class="sheet-url">${s.url}</div>
+        <div class="sheet-meta">Status: ${s.status || 'Ready'} · ${s.lastSynced || 'Never synced'}</div>
+      </div>
+      <div class="sheet-actions">
+        <button class="icon-btn" onclick="syncOneSheet('${s.id}')">🔄 Sync</button>
+        <button class="icon-btn danger" onclick="deleteSheet('${s.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSheetDropdown() {
+  var sel = document.getElementById('sheetSelectorDrop');
+  if(!sel) return;
+  if(!SHEET_REGISTRY.length) {
+    sel.innerHTML = '<option value="">— No sheets —</option>';
+    return;
+  }
+  var html = '';
+  SHEET_REGISTRY.forEach(function(s) {
+    var dataKeys = Object.keys(SHEET_DATA).filter(function(k){ return k.startsWith(s.id); });
+    if(dataKeys.length > 0) {
+      dataKeys.forEach(function(k) {
+        var d = SHEET_DATA[k];
+        html += `<option value="${k}" ${k===activeSheetId?'selected':''}>${s.label} — ${d.tabName}</option>`;
+      });
+    } else {
+      html += `<option value="${s.id}" disabled>${s.label} (Sync needed)</option>`;
+    }
+  });
+  sel.innerHTML = html;
+}
+
+async function syncOneSheet(id) {
+  var entry = SHEET_REGISTRY.find(function(s){ return s.id === id; });
+  if(!entry) return;
+  entry.status = 'Syncing...';
+  renderSheetList();
+  try {
+    var r = await fetch(entry.url);
+    var json = await r.json();
+    if(json.status !== 'success') throw new Error(json.message || 'Apps Script Error');
+    
+    json.tabs.forEach(function(tab) {
+      var compositeId = entry.id + '__' + tab.name;
+      SHEET_DATA[compositeId] = {
+        outletId: entry.id,
+        tabName: tab.name,
+        data: tab.data,
+        lastSynced: new Date().toLocaleTimeString('en-IN')
+      };
+      if(!activeSheetId) activeSheetId = compositeId;
+    });
+    
+    entry.status = 'Connected';
+    entry.lastSynced = new Date().toLocaleTimeString('en-IN');
+    saveRegistry();
+    localStorage.setItem('SHEET_DATA', JSON.stringify(SHEET_DATA));
+    
+    renderSheetList();
+    renderSheetDropdown();
+    if(activeSheetId) switchActiveSheet(activeSheetId);
+    showToast('✓ ' + entry.label + ' synced!');
+  } catch(e) {
+    entry.status = 'Error';
+    renderSheetList();
+    showToast('❌ Sync failed: ' + e.message);
+  }
+}
+
+function switchActiveSheet(compositeId) {
+  if(!compositeId || !SHEET_DATA[compositeId]) return;
+  activeSheetId = compositeId;
+  saveRegistry();
+  
+  var d = SHEET_DATA[compositeId];
+  var entry = SHEET_REGISTRY.find(function(s){ return s.id === d.outletId; });
+  
+  document.getElementById('hdrTitle').innerHTML = (entry ? entry.label : 'Dashboard') + ' - ' + d.tabName;
+  document.getElementById('hdrSub').innerHTML = 'Live Sync · ' + (d.lastSynced || 'Just now');
+  
+  processSheetData(d.data);
+  
+  killAllCharts();
+  Object.keys(builtPages).forEach(function(k){ delete builtPages[k]; });
+  renderUI();
+  setTimeout(function(){ buildPageCharts('overview'); }, 80);
+}
+
+function processSheetData(data) {
+  DATES = []; REV = []; RM = []; CP = []; PKG = []; HK = []; GASU = []; GASV = []; WATQ = []; WATV = []; PETTY = [];
+  window.DYNAMIC_DATA = {}; window.TARGETS = {}; window.RUN_RATES = {}; window.MTDS = {};
+
+  if(!data || !data.length) return;
+  var keys = Object.keys(data[0]);
+  var dateKeys = keys.filter(function(k){ return k !== 'Particulars' && k !== 'Target' && k !== 'Run Rate' && k !== 'MTD' && k !== ''; });
+
+  var revRow = data.find(function(r){ return r.Particulars === 'Net Revenue'; });
+  if(revRow && revRow.Target) TARGET = parseFloat(revRow.Target) || 14200000;
+
+  dateKeys.forEach(function(dk) {
+    var parts = dk.split('\n');
+    DATES.push(parts.length > 1 ? parts[1] : parts[0]);
+    REV.push(parseFloat(revRow ? revRow[dk] : 0) || 0);
+  });
+
+  data.forEach(function(row) {
+    if(!row.Particulars || row.Particulars === 'Net Revenue') return;
+    var p = row.Particulars;
+    window.TARGETS[p] = parseFloat(row.Target) || 0;
+    window.RUN_RATES[p] = parseFloat(row['Run Rate']) || 0;
+    window.MTDS[p] = parseFloat(row.MTD) || 0;
+    
+    var vals = dateKeys.map(function(dk){ return parseFloat(row[dk]) || 0; });
+    var pl = p.toLowerCase();
+    if(pl.indexOf('rm indent') !== -1) RM = vals;
+    else if(pl.indexOf('cp indent') !== -1) CP = vals;
+    else if(pl.indexOf('packaging indent') !== -1) PKG = vals;
+    else if(pl.indexOf('hk materials') !== -1) HK = vals;
+    else if(pl.indexOf('gail gas') !== -1 && pl.indexOf('unit') !== -1) GASU = vals;
+    else if(pl.indexOf('gail gas') !== -1 && pl.indexOf('value') !== -1) GASV = vals;
+    else if(pl.indexOf('water') !== -1 && pl.indexOf('unit') !== -1) WATQ = vals;
+    else if(pl.indexOf('water') !== -1 && (pl.indexOf('value') !== -1 || pl.indexOf('amt') !== -1)) WATV = vals;
+    else if(pl.indexOf('petty cash') !== -1) PETTY = vals;
+    else window.DYNAMIC_DATA[p] = vals;
+  });
+}
+
+function saveSheet() {
+  var lbl = document.getElementById('addSheetLabel').value.trim();
+  var url = document.getElementById('addSheetUrl').value.trim();
+  if(!lbl || !url) { document.getElementById('addSheetErr').textContent = 'Please fill all fields.'; return; }
+  var id = 'sh_' + Date.now();
+  SHEET_REGISTRY.push({ id: id, label: lbl, url: url });
+  saveRegistry();
+  closeModal('addSheetModal');
+  syncOneSheet(id);
+}
+
+function saveSetupSheet() {
+  var lbl = document.getElementById('setupSheetLabel').value.trim();
+  var url = document.getElementById('setupSheetUrl').value.trim();
+  if(!lbl || !url) { document.getElementById('setupErr').textContent = 'Please fill all fields.'; return; }
+  var id = 'sh_' + Date.now();
+  SHEET_REGISTRY.push({ id: id, label: lbl, url: url });
+  saveRegistry();
+  document.getElementById('page-setup').classList.remove('active');
+  document.getElementById('page-overview').classList.add('active');
+  syncOneSheet(id);
+}
+
+function deleteSheet(id) {
+  if(!confirm('Delete this sheet and all its cached data?')) return;
+  SHEET_REGISTRY = SHEET_REGISTRY.filter(function(s){ return s.id !== id; });
+  Object.keys(SHEET_DATA).forEach(function(k){ if(k.startsWith(id)) delete SHEET_DATA[k]; });
+  if(activeSheetId && activeSheetId.startsWith(id)) activeSheetId = null;
+  saveRegistry();
+  localStorage.setItem('SHEET_DATA', JSON.stringify(SHEET_DATA));
+  renderSheetList();
+  renderSheetDropdown();
+  if(!SHEET_REGISTRY.length) window.location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  loadRegistry();
+  document.querySelectorAll('.nav-btn').forEach(function(btn){
+    btn.onclick = function(){
+      var page = this.getAttribute('data-page');
+      if(!page) return;
+      document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('page-'+page).classList.add('active');
+      setTimeout(function(){ buildPageCharts(page); }, 50);
+      window.scrollTo({top:0, behavior:'smooth'});
+    };
+  });
+  if(!SHEET_REGISTRY.length) {
+    document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+    document.getElementById('page-setup').classList.add('active');
+  } else {
+    var cached = localStorage.getItem('SHEET_DATA');
+    if(cached) {
+      SHEET_DATA = JSON.parse(cached);
+      renderSheetList();
+      renderSheetDropdown();
+      if(activeSheetId) switchActiveSheet(activeSheetId);
+    } else {
+      syncOneSheet(SHEET_REGISTRY[0].id);
+    }
+  }
+  refreshKeyBadge();
+});
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('./sw.js').then(function(reg) {
-      console.log('SW Registered', reg.scope);
+      console.log('SW Registered');
     }).catch(function(err) {
-      console.log('SW Failed', err);
+      console.error('SW Failed', err);
     });
   });
 }
 </script>
-<script src="multisheet.js?v=8"></script>
 </body>
 </html>
 
