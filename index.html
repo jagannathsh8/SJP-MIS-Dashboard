@@ -676,77 +676,92 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
-<!-- ══════════ ANALYSIS ══════════ -->
+<!-- ══════════ ANALYSIS & INSIGHTS ══════════ -->
 <div class="page" id="page-analysis">
-  <div style="font-size:17px;font-weight:800;margin-bottom:4px">📈 Analysis &amp; Comparison</div>
-  <div style="font-size:11px;color:var(--m1);margin-bottom:16px">Compare date vs date, week vs week, or month vs month across all synced sheets.</div>
-  <div class="ana-mode-bar">
-    <button class="ana-mode-btn active" data-mode="date" onclick="setAnaMode('date',this)">📅 Date vs Date</button>
-    <button class="ana-mode-btn" data-mode="week" onclick="setAnaMode('week',this)">📆 Week vs Week</button>
-    <button class="ana-mode-btn" data-mode="month" onclick="setAnaMode('month',this)">📈 Month vs Month</button>
+  <div style="font-size:18px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:22px">📈</span> Deep Analysis & Business Intelligence
   </div>
-  <div id="ana-date">
-    <div class="card card-body" style="margin-bottom:12px">
-      <div class="card-title">Select Two Dates to Compare</div>
-      <div class="ana-picker">
-        <label>Sheet A:</label>
-        <select id="anaDateSheetA" onchange="populateAnaDates('A')"><option value="">-- Sheet --</option></select>
-        <select id="anaDateA"><option value="">-- Date --</option></select>
-        <span class="ana-vs">vs</span>
-        <label>Sheet B:</label>
-        <select id="anaDateSheetB" onchange="populateAnaDates('B')"><option value="">-- Sheet --</option></select>
-        <select id="anaDateB"><option value="">-- Date --</option></select>
+  <div style="font-size:11px;color:var(--m1);margin-bottom:20px">Advanced cross-sheet benchmarks and algorithmic performance insights.</div>
+
+  <!-- INSIGHT TABS -->
+  <div class="stab-bar" style="margin-bottom:20px">
+    <button class="stab-btn active" id="btnAnOverview" onclick="switchAnTab('overview')">Overview</button>
+    <button class="stab-btn" id="btnAnBenchmark" onclick="switchAnTab('benchmark')">Day Benchmark</button>
+    <button class="stab-btn" id="btnAnCompare" onclick="switchAnTab('compare')">Smart Compare</button>
+  </div>
+
+  <!-- AN OVERVIEW -->
+  <div id="an-overview">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-lbl">OPERATING MARGIN</div>
+        <div class="kpi-val" id="anKpiMargin" style="color:var(--grn)">--</div>
+        <div class="kpi-sub" id="anKpiMarginSub">Revenue vs Variable Costs</div>
       </div>
-      <button class="btn btn-primary" style="max-width:180px" onclick="runDateVsDate()">Compare →</button>
-    </div>
-    <div id="anaDateResult"></div>
-  </div>
-  <div id="ana-week" style="display:none">
-    <div class="card card-body" style="margin-bottom:12px">
-      <div class="card-title">Select Two Weeks to Compare</div>
-      <div class="ana-picker">
-        <label>Sheet A:</label>
-        <select id="anaWeekSheetA" onchange="populateAnaWeeks('A')"><option value="">-- Sheet --</option></select>
-        <select id="anaWeekA"><option value="">-- Week --</option></select>
-        <span class="ana-vs">vs</span>
-        <label>Sheet B:</label>
-        <select id="anaWeekSheetB" onchange="populateAnaWeeks('B')"><option value="">-- Sheet --</option></select>
-        <select id="anaWeekB"><option value="">-- Week --</option></select>
+      <div class="kpi-card">
+        <div class="kpi-lbl">REVENUE RUN RATE</div>
+        <div class="kpi-val" id="anKpiRunRate" style="color:var(--amb)">--</div>
+        <div class="kpi-sub" id="anKpiRunRateSub">Projected Month End</div>
       </div>
-      <button class="btn btn-primary" style="max-width:180px" onclick="runWeekVsWeek()">Compare →</button>
-    </div>
-    <div id="anaWeekResult"></div>
-  </div>
-  <div id="ana-month" style="display:none">
-    <div class="card card-body" style="margin-bottom:12px">
-      <div class="card-title">Select Months to Compare (up to 3)</div>
-      <div style="font-size:11px;color:var(--m1);margin-bottom:12px">Each synced sheet = one month.</div>
-      <div id="anaMonthSelectors" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
-      <button class="btn btn-primary" style="max-width:220px" onclick="runMonthVsMonth()">Generate Comparison →</button>
-    </div>
-    <div id="anaMonthResult"></div>
-    <div class="card card-body" style="margin-top:12px;display:none" id="anaMonthChartCard">
-      <div class="card-title">Revenue Comparison</div>
-      <div class="chart-wrap">
-        <button class="exp-btn" onclick="expandChart('chAnaRev', 'Revenue Comparison')">⛶</button>
-        <div style="position:relative;height:220px"><canvas id="chartAnaRev"></canvas></div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">PEAK DAY AVG</div>
+        <div class="kpi-val" id="anKpiPeak" style="color:var(--pur)">--</div>
+        <div class="kpi-sub" id="anKpiPeakSub">Highest performance level</div>
       </div>
     </div>
+
     <div class="grid2" style="margin-top:12px">
-      <div class="card card-body" id="anaMonthCostCard" style="display:none">
-        <div class="card-title">Cost Ratios vs Target</div>
+      <div class="card card-body">
+        <div class="card-title">Weekly Revenue Trend (Side-by-Side)</div>
         <div class="chart-wrap">
-          <button class="exp-btn" onclick="expandChart('chAnaCost', 'Cost Ratios')">⛶</button>
-          <div style="position:relative;height:180px"><canvas id="chartAnaCost"></canvas></div>
+          <button class="exp-btn" onclick="expandChart('chAnRevTrend', 'Weekly Trend')">⛶</button>
+          <div style="position:relative;height:240px"><canvas id="chartAnRevTrend"></canvas></div>
         </div>
       </div>
-      <div class="card card-body" id="anaMonthIndCard" style="display:none">
-        <div class="card-title">Indent % Daily Avg</div>
+      <div class="card card-body">
+        <div class="card-title">Daily Margin Analysis (%)</div>
         <div class="chart-wrap">
-          <button class="exp-btn" onclick="expandChart('chAnaInd', 'Indent Comparison')">⛶</button>
-          <div style="position:relative;height:180px"><canvas id="chartAnaInd"></canvas></div>
+          <button class="exp-btn" onclick="expandChart('chAnMargin', 'Daily Margin')">⛶</button>
+          <div style="position:relative;height:240px"><canvas id="chartAnMargin"></canvas></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- AN BENCHMARK -->
+  <div id="an-benchmark" style="display:none">
+    <div class="card card-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+        <div class="card-title" style="margin:0">4-Week Weekday Benchmark</div>
+        <div style="font-size:10px;color:var(--m1)">Comparison of same weekdays over 4 weeks</div>
+      </div>
+      <div id="anBenchmarkStatus" style="font-size:11px;color:var(--amb);margin-bottom:10px;display:none">Requires at least 28 days of data for full insight.</div>
+      <div style="margin-top:10px;height:320px"><canvas id="chartAnBenchmark"></canvas></div>
+      
+      <div id="anBenchmarkGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:20px"></div>
+    </div>
+  </div>
+
+  <!-- AN COMPARE -->
+  <div id="an-compare" style="display:none">
+    <div class="card card-body">
+      <div class="card-title">Cross-Sheet Smart Comparison</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:center;margin-top:15px">
+        <div>
+          <label style="font-size:10px;color:var(--m1)">Sheet A:</label>
+          <select id="anaDateSheetA" class="inp" onchange="populateAnaDates('A')"><option value="">-- Sheet --</option></select>
+          <select id="anaDateA" class="inp" style="margin-top:8px"><option value="">-- Date --</option></select>
+        </div>
+        <div style="font-size:12px;font-weight:700;color:var(--m1);margin-top:20px">VS</div>
+        <div>
+          <label style="font-size:10px;color:var(--m1)">Sheet B:</label>
+          <select id="anaDateSheetB" class="inp" onchange="populateAnaDates('B')"><option value="">-- Sheet --</option></select>
+          <select id="anaDateB" class="inp" style="margin-top:8px"><option value="">-- Date --</option></select>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:20px;max-width:200px" onclick="runDateVsDate()">Analyze Comparison →</button>
+      
+      <div id="anaDateResult" style="margin-top:25px"></div>
     </div>
   </div>
 </div>
@@ -1920,6 +1935,18 @@ function exportTeamData(){
 
 function closeTeamModal(){
   document.getElementById('teamDetailModal').style.display = 'none';
+}
+
+function switchAnTab(tab){
+  var tabs = ['overview','benchmark','compare'];
+  tabs.forEach(function(t){
+    var el = document.getElementById('an-'+t);
+    var btn = document.getElementById('btnAn'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(el) el.style.display = (t===tab ? 'block' : 'none');
+    if(btn) btn.classList.toggle('active', t===tab);
+  });
+  if(tab === 'overview') buildAnOverview();
+  if(tab === 'benchmark') buildAnBenchmark();
 }
 
 if ('serviceWorker' in navigator) {

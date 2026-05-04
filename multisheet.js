@@ -714,7 +714,8 @@ function buildTeamCharts() {
     locMap[loc] = (locMap[loc]||0) + 1;
     
     // Designation
-    var des = r['Designation'] || r['Role'] || r['Dept'] || r['Designation '] || 'Other';
+    var rawDes = r['Designation'] || r['Role'] || r['Dept'] || r['Designation '] || 'Other';
+    var des = String(rawDes).trim().toLowerCase().split(' ').map(function(w){ return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
     desigMap[des] = (desigMap[des]||0) + 1;
     
     // Referral Logic
@@ -790,7 +791,18 @@ function buildTeamCharts() {
       labels:desKeys, 
       datasets:[{data:desKeys.map(k=>desigMap[k]), backgroundColor:SHEET_COLORS.slice().reverse(), borderWidth:0}]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#94a3b8',font:{size:10}}}}, cutout:'65%'}
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right',labels:{color:'#94a3b8',font:{size:10}}},
+        datalabels: {
+          color: '#fff', font: { weight: 'bold', size: 10 },
+          formatter: function(val) { return val > 1 ? val : ''; },
+          anchor: 'center', align: 'center'
+        }
+      },
+      cutout:'65%'
+    }
   });
 
   killChart('chTeamMonth');
@@ -820,7 +832,47 @@ function buildTeamCharts() {
         }), 
         datasets:[{label:'Referrals', data:rKeys.map(k=>refMap[k]), backgroundColor:'#a78bfa', borderRadius:4}]
       },
-      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{display:false},ticks:{color:'#64748b'}}}}
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          datalabels: {
+            color: '#fff', anchor: 'end', align: 'end', offset: 4,
+            font: { weight: 'bold', size: 11 },
+            formatter: function(val) { return val; }
+          }
+        },
+        scales:{x:{grid:{display:false},ticks:{color:'#64748b'}},y:{grid:{display:false},ticks:{color:'#64748b'}}},
+        onClick: function(e, activeEls) {
+          if(!activeEls.length) return;
+          var idx = activeEls[0].index;
+          var key = rKeys[idx]; // The ID Key (e.g. "ID: 1571")
+          var idOnly = key.replace('ID: ','');
+          
+          var referred = data.filter(function(emp){
+            var keys = Object.keys(emp);
+            var refH = keys.find(k => k.toLowerCase().indexOf('refer') !== -1) || keys[7];
+            var refVal = String(emp[refH] || '');
+            return refVal.indexOf(idOnly) !== -1;
+          });
+          
+          if(!referred.length) return;
+          
+          var title = (idToName[idOnly] || idOnly);
+          document.getElementById('teamModalTitle').innerText = 'Referred by: ' + title;
+          var html = '<table style="width:100%;border-collapse:collapse;margin-top:10px">';
+          html += '<tr style="border-bottom:1px solid var(--b1);color:var(--m1)"><th style="text-align:left;padding:8px">Employee</th><th style="text-align:left;padding:8px">Designation</th><th style="text-align:left;padding:8px">Joined</th></tr>';
+          referred.forEach(function(emp){
+            var name = emp['Name as per Govt ID'] || emp['Name'] || 'Unknown';
+            var dsg = emp['Designation'] || emp['Role'] || '-';
+            var jdt = emp['Date of Joining'] || emp['Joining Date'] || '-';
+            html += '<tr style="border-bottom:1px solid var(--s1)"><td style="padding:8px">'+name+'</td><td style="padding:8px">'+dsg+'</td><td style="padding:8px">'+jdt+'</td></tr>';
+          });
+          html += '</table>';
+          document.getElementById('teamModalBody').innerHTML = html;
+          document.getElementById('teamDetailModal').style.display = 'flex';
+        }
+      }
     });
   }
 }
@@ -841,3 +893,155 @@ document.addEventListener('DOMContentLoaded', function(){
     syncOneSheet(targetOutlet);
   }
 });
+// ═══════════════════════════════════════════════
+// ANALYSIS & DEEP INSIGHTS
+// ═══════════════════════════════════════════════
+
+function buildAnOverview() {
+  var s = getActiveSheet();
+  if(!s || !s.data || !s.data.length) return;
+  
+  var rev = s.data.map(d=>d.sales||0);
+  var rm  = s.data.map(d=>d.rm||0);
+  var cp  = s.data.map(d=>d.cp||0);
+  var totRev = rev.reduce((a,b)=>a+b,0);
+  var totRm  = rm.reduce((a,b)=>a+b,0);
+  var totCp  = cp.reduce((a,b)=>a+b,0);
+  
+  // 1. Operating Margin
+  var margin = totRev > 0 ? ((totRev - totRm - totCp) / totRev) * 100 : 0;
+  document.getElementById('anKpiMargin').innerText = margin.toFixed(1) + '%';
+  document.getElementById('anKpiMarginSub').innerText = 'Net Margin (before fixed costs)';
+  
+  // 2. Run Rate
+  var daysElapsed = s.data.filter(d=>d.sales>0).length || 1;
+  var totalDays = s.data.length;
+  var runRate = (totRev / daysElapsed) * totalDays;
+  document.getElementById('anKpiRunRate').innerText = '₹' + fmtN(runRate);
+  document.getElementById('anKpiRunRateSub').innerText = 'Based on ' + daysElapsed + ' days activity';
+  
+  // 3. Peak Day
+  var peak = Math.max(...rev);
+  document.getElementById('anKpiPeak').innerText = '₹' + fmtN(peak);
+  document.getElementById('anKpiPeakSub').innerText = 'Highest Single Day Revenue';
+
+  // 4. Weekly Trend Chart
+  var weeks = [[],[],[],[],[]];
+  s.data.forEach((d,i)=>{
+    var wIdx = Math.floor(i/7);
+    if(weeks[wIdx]) weeks[wIdx].push(d.sales||0);
+  });
+  
+  killChart('chAnRevTrend');
+  var cTrend = document.getElementById('chartAnRevTrend');
+  if(cTrend) CI.chAnRevTrend = new Chart(cTrend, {
+    type: 'bar',
+    data: {
+      labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'],
+      datasets: [{
+        label: 'Total Revenue',
+        data: weeks.map(w => w.reduce((a,b)=>a+b,0)),
+        backgroundColor: '#60a5fa', borderRadius: 4
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#64748b'}},x:{ticks:{color:'#64748b'}}}}
+  });
+
+  // 5. Daily Margin Trend Chart
+  var dailyMargins = s.data.map(d => {
+    var r = d.sales || 0;
+    if(r===0) return 0;
+    return ((r - (d.rm||0) - (d.cp||0)) / r) * 100;
+  });
+
+  killChart('chAnMargin');
+  var cMargin = document.getElementById('chartAnMargin');
+  if(cMargin) CI.chAnMargin = new Chart(cMargin, {
+    type: 'line',
+    data: {
+      labels: s.data.map((d,i)=>i+1),
+      datasets: [{
+        label: 'Margin %',
+        data: dailyMargins,
+        borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)',
+        fill: true, tension: 0.4, pointRadius: 0
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#64748b', callback:v=>v+'%'}},x:{ticks:{color:'#64748b'}}}}
+  });
+}
+
+function buildAnBenchmark() {
+  var s = getActiveSheet();
+  if(!s || !s.data || !s.data.length) return;
+  
+  var todayIdx = s.data.findLastIndex(d=>d.sales>0);
+  if(todayIdx === -1) todayIdx = s.data.length - 1;
+  
+  var today = s.data[todayIdx];
+  var todayDOW = todayIdx % 7; // Simplify DOW based on index
+  
+  // Find last 4 same weekdays across ALL sheets for more data
+  var sameDOWData = [];
+  var allSheets = SHEETS.slice().reverse();
+  
+  allSheets.forEach(sh => {
+    sh.data.forEach((d, i) => {
+      if(i % 7 === todayDOW && d.sales > 0 && !(sh.id === s.id && i === todayIdx)) {
+        sameDOWData.push(d.sales);
+      }
+    });
+  });
+  
+  var avg4 = sameDOWData.slice(0,4).reduce((a,b)=>a+b,0) / Math.min(sameDOWData.length, 4);
+  if(isNaN(avg4)) avg4 = 0;
+
+  var diff = today.sales - avg4;
+  var pct = avg4 > 0 ? (diff / avg4) * 100 : 0;
+  
+  var grid = document.getElementById('anBenchmarkGrid');
+  if(grid) {
+    grid.innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-lbl">TODAY PERFORMANCE</div>
+        <div class="kpi-val">₹${fmtN(today.sales)}</div>
+        <div class="kpi-sub">Actual Sales</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">4-WEEK BENCHMARK</div>
+        <div class="kpi-val">₹${fmtN(avg4)}</div>
+        <div class="kpi-sub">Avg of same weekdays</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">VARIANCE</div>
+        <div class="kpi-val" style="color:${pct>=0?'var(--grn)':'var(--red)'}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>
+        <div class="kpi-sub">${pct>=0?'Above':'Below'} 4-week average</div>
+      </div>
+    `;
+  }
+
+  killChart('chAnBenchmark');
+  var cBench = document.getElementById('chartAnBenchmark');
+  if(cBench) CI.chAnBenchmark = new Chart(cBench, {
+    type: 'bar',
+    data: {
+      labels: ['4-Week Avg', 'Today'],
+      datasets: [{
+        data: [avg4, today.sales],
+        backgroundColor: ['rgba(255,255,255,0.1)', '#f59e0b'],
+        borderRadius: 8, barThickness: 60
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        datalabels: {
+          color: '#fff', font: { weight: 'bold', size: 14 },
+          formatter: v => '₹' + fmtN(v), anchor: 'end', align: 'top'
+        }
+      },
+      scales:{y:{display:false}, x:{ticks:{color:'#f1f5f9', font:{size:14, weight:'bold'}}, grid:{display:false}}}
+    }
+  });
+}
