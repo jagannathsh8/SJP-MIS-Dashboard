@@ -781,7 +781,7 @@ tbody tr:last-child td{border-bottom:none}
     <div style="font-weight:700;font-size:14px;margin-bottom:5px">Drop historical MIS here</div>
     <div style="font-size:11px;color:var(--m1);margin-bottom:15px">Supports .xlsx from previous months/years</div>
     <input type="file" id="misUpload" accept=".xlsx" style="display:none" onchange="handleMisUpload(this)">
-    <button class="btn btn-primary" style="width:auto;padding:10px 24px" onclick="document.getElementById('misUpload').click()">Choose File</button>
+    <button id="btnUploadMis" class="btn btn-primary" style="width:auto;padding:10px 24px" onclick="document.getElementById('misUpload').click()">Choose File</button>
   </div>
 
   <div id="predictiveContent" style="display:none">

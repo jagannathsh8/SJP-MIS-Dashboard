@@ -1054,21 +1054,47 @@ function handleMisUpload(input) {
   var file = input.files[0];
   if(!file) return;
   
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      var data = new Uint8Array(e.target.result);
-      var workbook = XLSX.read(data, {type: 'array'});
-      var firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      var rows = XLSX.utils.sheet_to_json(firstSheet, {defval: ''});
-      
-      processHistoricalData(rows);
-    } catch(err) {
-      alert("Error reading Excel file. Ensure it's a valid .xlsx file.");
-      console.error(err);
-    }
-  };
-  reader.readAsArrayBuffer(file);
+  var btn = document.getElementById('btnUploadMis');
+  if(btn) {
+    btn.innerHTML = '<span class="spinner" style="border-top-color:#fff;margin-right:8px;width:12px;height:12px"></span> Analyzing Data...';
+    btn.disabled = true;
+  }
+  
+  // Use setTimeout to allow UI to update before heavy synchronous parsing
+  setTimeout(function() {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data, {type: 'array'});
+        var firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        
+        // Smart Header Detection: Scan first 20 rows for typical headers
+        var rawRows = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
+        var headerRowIdx = 0;
+        for(var i=0; i<Math.min(20, rawRows.length); i++) {
+          var rowStr = rawRows[i].join(' ').toLowerCase();
+          if(rowStr.includes('date') || rowStr.includes('revenue') || rowStr.includes('sales') || rowStr.includes('particular')) {
+            headerRowIdx = i;
+            break;
+          }
+        }
+        
+        var rows = XLSX.utils.sheet_to_json(firstSheet, {range: headerRowIdx, defval: ''});
+        processHistoricalData(rows);
+        
+        if(btn) {
+          btn.innerHTML = 'Data Loaded Successfully ✅';
+          setTimeout(() => { btn.innerHTML = 'Upload Another File'; btn.disabled = false; }, 3000);
+        }
+      } catch(err) {
+        alert("Error reading Excel file. Ensure it's a valid .xlsx file.");
+        console.error(err);
+        if(btn) { btn.innerHTML = 'Choose File'; btn.disabled = false; }
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }, 100);
 }
 
 function processHistoricalData(rows) {
