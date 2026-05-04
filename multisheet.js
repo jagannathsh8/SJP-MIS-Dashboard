@@ -1064,6 +1064,41 @@ function switchPredTab(id, btn) {
 
 var HIST_MONTHS_MAP = {}; // Map of MonthName -> { MetricName: Value }
 
+async function runPredictiveAnalysis() {
+  var s = getActiveSheet();
+  if(!s || !s.url) { alert("Please connect and select a Google Sheet first in the Data Source tab."); return; }
+  
+  var btn = event.currentTarget;
+  var oldText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Syncing MIS...';
+  
+  try {
+    var url = s.url + (s.url.indexOf('?')===-1?'?':'&') + 'action=getMIS';
+    var resp = await fetch(url);
+    var json = await resp.json();
+    
+    if(json.status === 'success') {
+      var misTab = json.tabs.find(t => t.name === 'MIS');
+      if(misTab && misTab.rawData) {
+        processHistoricalData(misTab.rawData);
+        document.getElementById('predictiveContent').style.display = 'block';
+        showToast("✅ MIS Data Synced Successfully!");
+      } else {
+        alert("No tab named 'MIS' found in your sheet. Please ensure you have a tab named exactly 'MIS'.");
+      }
+    } else {
+      alert("Error from Apps Script: " + (json.message || "Unknown error"));
+    }
+  } catch(e) {
+    console.error(e);
+    alert("Connection Error: Make sure your Apps Script is deployed as 'Web App' and set to 'Anyone' access.");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldText;
+  }
+}
+
 function processHistoricalData(rawRows) {
   if(!rawRows || !rawRows.length) return;
   window.LAST_HIST_ROWS = rawRows;
