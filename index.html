@@ -11,6 +11,7 @@
 <title>SJP · Babai Tiffin MIS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -331,6 +332,7 @@ tbody tr:last-child td{border-bottom:none}
   <button class="nav-btn" data-page="team">🧑‍🤝‍🧑 Team</button>
   <button class="nav-btn" data-page="intel">✦ Intelligence</button>
   <button class="nav-btn" data-page="analysis">📈 Analysis</button>
+  <button class="nav-btn" data-page="predictive">🔮 Predictive</button>
   <button class="nav-btn" data-page="datasrc">🔗 Data Source</button>
 </div>
 
@@ -766,7 +768,74 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
-<!-- ══════════ DATA SOURCE ══════════ -->
+<!-- ══════════ PREDICTIVE MIS ══════════ -->
+<div class="page" id="page-predictive">
+  <div style="font-size:18px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:22px">🔮</span> Predictive MIS & Historical Forecasting
+  </div>
+  <div style="font-size:11px;color:var(--m1);margin-bottom:20px">Upload historical MIS data (Excel) to generate growth projections and efficiency scores.</div>
+
+  <!-- UPLOAD ZONE -->
+  <div class="card card-body" style="border:2px dashed var(--b2);background:rgba(255,255,255,0.02);text-align:center;padding:30px 20px;margin-bottom:20px">
+    <div style="font-size:28px;margin-bottom:10px">📤</div>
+    <div style="font-weight:700;font-size:14px;margin-bottom:5px">Drop historical MIS here</div>
+    <div style="font-size:11px;color:var(--m1);margin-bottom:15px">Supports .xlsx from previous months/years</div>
+    <input type="file" id="misUpload" accept=".xlsx" style="display:none" onchange="handleMisUpload(this)">
+    <button class="btn btn-primary" style="width:auto;padding:10px 24px" onclick="document.getElementById('misUpload').click()">Choose File</button>
+  </div>
+
+  <div id="predictiveContent" style="display:none">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-lbl">HISTORICAL DAILY AVG</div>
+        <div class="kpi-val" id="predHistAvg" style="color:var(--m2)">--</div>
+        <div class="kpi-sub">Based on uploaded data</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">CURRENT RUN RATE</div>
+        <div class="kpi-val" id="predCurrRun" style="color:var(--amb)">--</div>
+        <div class="kpi-sub">Live month projection</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">GROWTH MULTIPLIER</div>
+        <div class="kpi-val" id="predGrowth" style="color:var(--pur)">--</div>
+        <div class="kpi-sub">Current vs Historic Pace</div>
+      </div>
+    </div>
+
+    <div class="card card-body" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:10px">
+        <div class="card-title" style="margin:0">Automated Budget & Forecast Planner</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:11px;color:var(--m1)">Forecast Horizon:</label>
+          <select id="predMonths" class="inp" style="width:auto;padding:5px 10px" onchange="if(window.LAST_HIST_ROWS) processHistoricalData(window.LAST_HIST_ROWS)">
+            <option value="1">Next 1 Month</option>
+            <option value="2">Next 2 Months</option>
+            <option value="3">Next 3 Months</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Line Item / Parameter</th>
+              <th class="num">Current Mth (Est)</th>
+              <th class="num" id="thFore1">Next Month</th>
+              <th class="num" id="thFore2" style="display:none">Month +2</th>
+              <th class="num" id="thFore3" style="display:none">Month +3</th>
+              <th class="num">Budget Ratio</th>
+            </tr>
+          </thead>
+          <tbody id="predBudgetTbl"></tbody>
+        </table>
+      </div>
+      
+      <div id="predInsights" style="font-size:11px;color:var(--m1);line-height:1.7;margin-top:16px;padding-top:16px;border-top:1px solid var(--b1)"></div>
+    </div>
+  </div>
+</div>
 <div class="page" id="page-datasrc">
   <div style="font-size:17px;font-weight:800;margin-bottom:4px">🔗 Data Source</div>
   <div style="font-size:12px;color:var(--m1);margin-bottom:16px">Manage multiple Google Sheets — one per month. Each needs its own Apps Script /exec URL.</div>

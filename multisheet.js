@@ -1045,3 +1045,166 @@ function buildAnBenchmark() {
     }
   });
 }
+
+// ═══════════════════════════════════════════════
+// PREDICTIVE MIS (Excel Upload)
+// ═══════════════════════════════════════════════
+
+function handleMisUpload(input) {
+  var file = input.files[0];
+  if(!file) return;
+  
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var workbook = XLSX.read(data, {type: 'array'});
+      var firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(firstSheet, {defval: ''});
+      
+      processHistoricalData(rows);
+    } catch(err) {
+      alert("Error reading Excel file. Ensure it's a valid .xlsx file.");
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processHistoricalData(rows) {
+  if(!rows || !rows.length) return;
+  window.LAST_HIST_ROWS = rows;
+  
+  var monthsToPredict = parseInt(document.getElementById('predMonths').value || '1', 10);
+  
+  // Show/Hide columns based on selection
+  document.getElementById('thFore1').style.display = 'table-cell';
+  document.getElementById('thFore2').style.display = monthsToPredict >= 2 ? 'table-cell' : 'none';
+  document.getElementById('thFore3').style.display = monthsToPredict >= 3 ? 'table-cell' : 'none';
+
+  // 1. Fuzzy match headers for all required parameters
+  var keys = Object.keys(rows[0]);
+  var getK = (keywords) => keys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+  
+  var dKey = getK(['date', 'day', 'timestamp']);
+  var pMap = {
+    'Sales': getK(['revenue', 'sales', 'net rev', 'total rev']),
+    'RM Indent': getK(['rm indent', 'raw material']),
+    'CP Indent': getK(['cp indent', 'consumable']),
+    'Packaging': getK(['packaging', 'packing']),
+    'HK Material': getK(['hk', 'housekeeping']),
+    'Gas (GAIL)': getK(['gas', 'gail']),
+    'Water': getK(['water', 'tanker']),
+    'Petty Cash': getK(['petty', 'cash'])
+  };
+  
+  if(!dKey || !pMap['Sales']) {
+    alert("Could not automatically identify Date and Revenue columns in the uploaded file.");
+    return;
+  }
+  
+  // 2. Aggregate Historical Data
+  var histSums = {};
+  Object.keys(pMap).forEach(k => histSums[k] = 0);
+  var validDays = 0;
+  
+  rows.forEach(row => {
+    var rev = parseFloat(row[pMap['Sales']]) || 0;
+    if(rev > 0) {
+      validDays++;
+      Object.keys(pMap).forEach(k => {
+        if(pMap[k]) histSums[k] += (parseFloat(row[pMap[k]]) || 0);
+      });
+    }
+  });
+  
+  var histDailyAvgRev = validDays > 0 ? histSums['Sales'] / validDays : 0;
+  
+  // Calculate Historical Ratios (as % of Sales)
+  var histRatios = {};
+  Object.keys(pMap).forEach(k => {
+    histRatios[k] = histSums['Sales'] > 0 ? histSums[k] / histSums['Sales'] : 0;
+  });
+
+  // 3. Get Current Live Data (Run Rate)
+  var liveAvgRev = 0;
+  var liveSums = {};
+  Object.keys(pMap).forEach(k => liveSums[k] = 0);
+  
+  var s = getActiveSheet();
+  if(s && s.data) {
+    var cDays = s.data.filter(d=>d.sales>0).length || 1;
+    var cRev = s.data.map(d=>d.sales||0).reduce((a,b)=>a+b,0);
+    liveAvgRev = cRev / cDays;
+    
+    // Attempt to map live data to parameters
+    liveSums['Sales'] = cRev;
+    liveSums['RM Indent'] = s.data.map(d=>d.rm||0).reduce((a,b)=>a+b,0);
+    liveSums['CP Indent'] = s.data.map(d=>d.cp||0).reduce((a,b)=>a+b,0);
+    liveSums['Packaging'] = s.data.map(d=>d.pkg||0).reduce((a,b)=>a+b,0);
+    liveSums['HK Material'] = s.data.map(d=>d.hk||0).reduce((a,b)=>a+b,0);
+    liveSums['Gas (GAIL)'] = s.data.map(d=>d.gasv||0).reduce((a,b)=>a+b,0);
+    liveSums['Water'] = s.data.map(d=>d.watv||0).reduce((a,b)=>a+b,0);
+    liveSums['Petty Cash'] = s.data.map(d=>d.petty||0).reduce((a,b)=>a+b,0);
+  }
+  
+  var liveTotalEst = {};
+  Object.keys(pMap).forEach(k => {
+    liveTotalEst[k] = (liveSums[k] / (s.data.filter(d=>d.sales>0).length||1)) * 30; // Project to 30 days
+  });
+
+  // 4. Calculate Growth & Multiplier
+  var growthMult = histDailyAvgRev > 0 ? (liveAvgRev / histDailyAvgRev) : 1;
+  // Bound the multiplier to avoid wild predictions (e.g., max 15% growth per month)
+  var safeMult = Math.min(Math.max(growthMult, 0.8), 1.15); 
+  
+  document.getElementById('predHistAvg').innerText = '₹' + fmtN(histDailyAvgRev);
+  document.getElementById('predCurrRun').innerText = '₹' + fmtL(liveAvgRev * 30);
+  document.getElementById('predGrowth').innerText = (growthMult * 100).toFixed(1) + '%';
+  document.getElementById('predGrowth').style.color = growthMult >= 1 ? 'var(--grn)' : 'var(--red)';
+
+  // 5. Generate Budget Table
+  var tblHtml = '';
+  Object.keys(pMap).forEach(k => {
+    var ratioPct = (histRatios[k] * 100).toFixed(2);
+    if(k === 'Sales') ratioPct = '100.00';
+    
+    // Baseline for predictions is Current Mth Est * Growth Multiplier
+    var baseVal = liveTotalEst['Sales'] > 0 ? liveTotalEst['Sales'] : (histDailyAvgRev * 30);
+    
+    var m1Sales = baseVal * safeMult;
+    var m2Sales = m1Sales * safeMult;
+    var m3Sales = m2Sales * safeMult;
+    
+    var m1Val = m1Sales * histRatios[k];
+    var m2Val = m2Sales * histRatios[k];
+    var m3Val = m3Sales * histRatios[k];
+    
+    var color = k==='Sales' ? 'var(--amb)' : 'var(--txt)';
+    var weight = k==='Sales' ? '700' : '400';
+    
+    tblHtml += `<tr>
+      <td style="color:${color};font-weight:${weight}">${k}</td>
+      <td class="num" style="font-family:'DM Mono',monospace;color:var(--m2)">₹${fmtL(liveTotalEst[k])}</td>
+      <td class="num" style="font-family:'DM Mono',monospace;color:${color};font-weight:700">₹${fmtL(m1Val)}</td>
+      <td class="num" style="font-family:'DM Mono',monospace;display:${monthsToPredict>=2?'table-cell':'none'}">₹${fmtL(m2Val)}</td>
+      <td class="num" style="font-family:'DM Mono',monospace;display:${monthsToPredict>=3?'table-cell':'none'}">₹${fmtL(m3Val)}</td>
+      <td class="num" style="color:var(--m1)">${ratioPct}%</td>
+    </tr>`;
+  });
+  
+  document.getElementById('predBudgetTbl').innerHTML = tblHtml;
+  
+  // 6. Insights Text
+  var iHtml = `<strong>Executive Summary:</strong> Based on historical data, your standard operating cost for RM is <strong>${(histRatios['RM Indent']*100).toFixed(1)}%</strong> and CP is <strong>${(histRatios['CP Indent']*100).toFixed(1)}%</strong>. `;
+  iHtml += `Applying your current growth trajectory of <strong>${((safeMult-1)*100).toFixed(1)}%</strong>, we project next month's sales to reach <strong>₹${fmtL(baseVal*safeMult)}</strong>. `;
+  iHtml += `To maintain profitability, strictly allocate budgets according to the "Next Month" column above. Do not exceed <strong>₹${fmtL((baseVal*safeMult)*histRatios['RM Indent'])}</strong> on Raw Materials.`;
+  
+  document.getElementById('predInsights').innerHTML = iHtml;
+  
+  document.getElementById('predictiveContent').style.display = 'block';
+  
+  // Cleanup old charts if they existed
+  killChart('chPredYoy');
+  killChart('chPredCost');
+}
