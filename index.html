@@ -657,9 +657,21 @@ tbody tr:last-child td{border-bottom:none}
 
   <div class="card card-body" style="margin-top:12px">
     <div class="card-title">Referral Analytics (Top Referrers)</div>
+    <div style="font-size:10px;color:var(--m1);margin-top:-6px;margin-bottom:10px">Click a bar to see referred employees.</div>
     <div class="chart-wrap">
       <button class="exp-btn" onclick="expandChart('chTeamRef', 'Referral Analytics')">⛶</button>
-      <div style="position:relative;height:220px"><canvas id="chartTeamRef"></canvas></div>
+      <div style="position:relative;height:260px"><canvas id="chartTeamRef"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Referral Detail Modal -->
+  <div id="teamDetailModal" class="modal-overlay" style="display:none;z-index:10000">
+    <div class="modal-card" style="max-width:500px;width:95%">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+        <div style="font-weight:800;font-size:16px" id="teamModalTitle">Referred Employees</div>
+        <button class="btn btn-ghost" onclick="closeTeamModal()" style="padding:5px 10px">✕</button>
+      </div>
+      <div id="teamModalBody" style="max-height:60vh;overflow-y:auto;font-size:12px"></div>
     </div>
   </div>
 </div>
@@ -1172,6 +1184,10 @@ function buildPageCharts(page){
   var m = calcMetrics();
   var xl = DATES.map(shortD);
 
+  Chart.register(ChartDataLabels);
+  
+  Chart.register(ChartDataLabels);
+  
   if(page === 'overview'){
     killChart('chOv');
     CI.chOv = new Chart(document.getElementById('chartOverview'),{
@@ -1900,6 +1916,10 @@ function exportTeamData(){
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+function closeTeamModal(){
+  document.getElementById('teamDetailModal').style.display = 'none';
 }
 
 if ('serviceWorker' in navigator) {
