@@ -1930,9 +1930,22 @@ function setMsg(id, msg, color){
 
 function showToast(msg){
   var el = document.getElementById('toastEl');
+  if(!el) return;
   el.textContent = msg;
   el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 3000);
 }
+
+// ── FORMATTERS ──
+function fmtN(v, d){ return (v||0).toLocaleString('en-IN', {minimumFractionDigits:d||0, maximumFractionDigits:d||0}); }
+function fmtL(v){ 
+  if(v >= 100000 || v <= -100000) return '₹' + (v/100000).toFixed(2) + 'L';
+  return '₹' + fmtN(v, 0);
+}
+function rnd(v){ return Math.round(v||0); }
+function sum(a){ return (a||[]).reduce(function(x,y){return x+(parseFloat(y)||0);}, 0); }
+function avg(a){ return a && a.length ? sum(a)/a.length : 0; }
+function clamp(v, min, max){ return Math.min(Math.max(v, min), max); }
 
 </script>
 
@@ -2079,7 +2092,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
-<script src="multisheet.js?v=7"></script>
+<script src="multisheet.js?v=8"></script>
 </body>
 </html>
 

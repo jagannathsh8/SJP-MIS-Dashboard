@@ -882,6 +882,158 @@ function buildTeamCharts() {
   }
 }
 
+function getActiveSheet(){ return SHEET_DATA[activeSheetId]; }
+
+function renderSheetList() {
+  var el = document.getElementById('sheetListEl');
+  if(!el) return;
+  if(!SHEET_REGISTRY.length) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--m1);font-size:12px">No sheets added yet. Click "+ Add Sheet" to connect your first month.</div>';
+    return;
+  }
+  
+  var html = '';
+  SHEET_REGISTRY.forEach(function(s){
+    var isConnected = Object.keys(SHEET_DATA).some(function(k){ return SHEET_DATA[k].outletId === s.id; });
+    var color = isConnected ? 'var(--grn)' : 'var(--m1)';
+    html += `<div class="card card-body" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:700;font-size:13px">${s.label}</div>
+        <div style="font-size:10px;color:var(--m1);margin-top:3px">${s.url.substring(0, 45)}...</div>
+        <div style="font-size:10px;color:${color};margin-top:4px;font-weight:700">${isConnected ? '● Connected' : '○ Disconnected'}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="padding:5px 10px" onclick="syncOneSheet('${s.id}')">Sync</button>
+        <button class="btn btn-ghost" style="padding:5px 10px" onclick="editSheet('${s.id}')">Edit</button>
+        <button class="btn btn-ghost" style="padding:5px 10px;color:var(--red)" onclick="deleteSheet('${s.id}')">Del</button>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderSheetDropdown() {
+  var el = document.getElementById('sheetSelectorDrop');
+  if(!el) return;
+  var html = '<option value="">— Select Sheet —</option>';
+  
+  // Group by outlet
+  SHEET_REGISTRY.forEach(function(outlet){
+    var tabs = Object.keys(SHEET_DATA).filter(function(k){ return SHEET_DATA[k].outletId === outlet.id; });
+    if(tabs.length) {
+      html += `<optgroup label="${outlet.label}">`;
+      tabs.forEach(function(tabId){
+        var tab = SHEET_DATA[tabId];
+        var sel = (tabId === activeSheetId) ? 'selected' : '';
+        html += `<option value="${tabId}" ${sel}>${tab.name}</option>`;
+      });
+      html += `</optgroup>`;
+    }
+  });
+  el.innerHTML = html;
+}
+
+function populateAnaSelectors() {
+  var selectors = ['anaDateSheetA', 'anaDateSheetB'];
+  selectors.forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    var html = '<option value="">-- Sheet --</option>';
+    Object.keys(SHEET_DATA).forEach(function(k){
+      html += `<option value="${k}">${SHEET_DATA[k].name}</option>`;
+    });
+    el.innerHTML = html;
+  });
+}
+
+function openAddSheet() {
+  document.getElementById('addSheetModalTitle').innerText = '＋ Add Sheet';
+  document.getElementById('addSheetLabel').value = '';
+  document.getElementById('addSheetUrl').value = '';
+  document.getElementById('addSheetEditId').value = '';
+  openModal('addSheetModal');
+}
+
+function editSheet(id) {
+  var s = SHEET_REGISTRY.find(function(x){ return x.id === id; });
+  if(!s) return;
+  document.getElementById('addSheetModalTitle').innerText = '✎ Edit Sheet';
+  document.getElementById('addSheetLabel').value = s.label;
+  document.getElementById('addSheetUrl').value = s.url;
+  document.getElementById('addSheetEditId').value = s.id;
+  openModal('addSheetModal');
+}
+
+async function saveSheet() {
+  var lbl = document.getElementById('addSheetLabel').value.trim();
+  var url = document.getElementById('addSheetUrl').value.trim();
+  var editId = document.getElementById('addSheetEditId').value;
+  
+  if(!lbl || !url) { alert("Please fill all fields."); return; }
+  
+  var id = editId || ('out_' + Date.now());
+  if(editId) {
+    var idx = SHEET_REGISTRY.findIndex(function(x){ return x.id === editId; });
+    SHEET_REGISTRY[idx] = { id: id, label: lbl, url: url };
+  } else {
+    SHEET_REGISTRY.push({ id: id, label: lbl, url: url });
+  }
+  
+  saveRegistry();
+  closeModal('addSheetModal');
+  renderSheetList();
+  showToast("Sheet saved. Syncing data...");
+  syncOneSheet(id);
+}
+
+function deleteSheet(id) {
+  if(!confirm("Delete this outlet and all its cached data?")) return;
+  SHEET_REGISTRY = SHEET_REGISTRY.filter(function(x){ return x.id !== id; });
+  Object.keys(SHEET_DATA).forEach(function(k){
+    if(SHEET_DATA[k].outletId === id) delete SHEET_DATA[k];
+  });
+  saveRegistry();
+  renderSheetList();
+  renderSheetDropdown();
+  showToast("Sheet removed.");
+}
+
+async function syncOneSheet(outletId) {
+  var s = SHEET_REGISTRY.find(function(x){ return x.id === outletId; });
+  if(!s) return;
+  
+  try {
+    var url = s.url + (s.url.indexOf('?')===-1?'?':'&') + 'action=getTabs';
+    var resp = await fetch(url);
+    var json = await resp.json();
+    
+    if(json.status === 'success') {
+      parseAppsScriptTabs(json);
+      // Link the new tabs to this outlet
+      json.tabs.forEach(function(t){
+        if(t.name.trim().toUpperCase() === 'MIS') return;
+        var tabId = outletId + '__' + t.name;
+        if(SHEET_DATA[tabId]) SHEET_DATA[tabId].outletId = outletId;
+      });
+      
+      renderSheetList();
+      renderSheetDropdown();
+      populateAnaSelectors();
+      showToast("✅ " + s.label + " synced successfully!");
+    }
+  } catch(e) {
+    console.error(e);
+    showToast("❌ Sync failed for " + s.label);
+  }
+}
+
+async function syncAllSheets() {
+  showToast("Syncing all outlets...");
+  for(var s of SHEET_REGISTRY) {
+    await syncOneSheet(s.id);
+  }
+}
+
 // ═══════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════
