@@ -61,12 +61,10 @@ function parseAppsScriptTabs(json){
   if(json.status!=='success' || !json.tabs) throw new Error('Invalid multi-tab response');
   var parsedTabs = {};
   
-  window.MIS_DATA = null;
-  
   json.tabs.forEach(function(tab){
-    if(tab.name.toUpperCase() === 'MIS' && tab.rawData) {
-      window.MIS_DATA = tab.rawData;
-      return;
+    if(tab.name.trim().toUpperCase() === 'MIS') {
+      if(tab.rawData) window.MIS_DATA = tab.rawData;
+      return; // Always drop the MIS tab from regular processing
     }
     
     var data = tab.data;
